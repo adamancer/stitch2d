@@ -25,10 +25,123 @@ try:
 except:
     from pillow import Image
 
+from natsort import natsorted
+
+import minsci
+
 
 #-------------------------------------------------------------------------------
 #-FUNCTION DEFINITIONS----------------------------------------------------------
 #-------------------------------------------------------------------------------
+
+class Counter(dict):
+
+    def add(self, key, val=1):
+        try:
+            self[key] += val
+        except:
+            self[key] = val
+
+
+class Mosaic(object):
+
+
+    def __init__(self, path):
+        self.path = path
+        self.extmap = {
+            '.jpg' : 'JPEG',
+            '.tif' : 'TIFF',
+            '.tiff' : 'TIFF'
+        }
+
+
+
+
+    def set_parameters(self):
+        yes_no = {'y' : True, 'n' : False}
+        self.num_cols = int(minsci.prompt('Number of columns:', '\d+'))
+        self.mag = int(minsci.prompt('Magnification:', '\d+'))
+        self.snake = minsci.prompt('Snake pattern?', yes_no)
+        if not minsci.prompt('Are these parameters okay?', yes_no):
+            self.set_parameters()
+        else:
+            return self
+
+
+
+
+    def create_mosaic(self):
+        mosaic_width = self.w * self.num_cols
+        mosaic_height = self.h * self.num_rows
+        mosaic = Image.new('RGB', (mosaic_width, mosaic_height))
+        y = 0
+        for row in self.rows:
+            if self.snake and not (y + 1) % 2:
+                row = row[::-1]
+            x = 0
+            for fp in row:
+                mosaic.paste(Image.open(fp), (self.w * x, self.h * y))
+                x += 1
+            y += 1
+        mosaic.save(self.name + self.ext, self.extmap[self.ext])
+
+
+
+
+    def classify_tiles(self, path):
+        """Determine parameters for tiles in path"""
+        exts = Counter()
+        dims = Counter()
+        tiles = []
+        for fn in os.listdir(path):
+            fp = os.path.join(path, fn)
+            try:
+                img = Image.open(fp)
+            except:
+                continue
+            else:
+                exts.add(os.path.splitext(fn)[1])
+                dims.add('x'.join([str(x) for x in img.size]))
+                tiles.append(fp)
+        self.ext = [key for key in exts
+                    if exts[key] == max(exts.values())][0].lower()
+        self.dim = [key for key in dims
+                    if dims[key] == max(dims.values())][0]
+        self.w, self.h = [int(x) for x in self.dim.split('x')]
+        self.name = os.path.dirname(path)
+        self.rows = self.mandolin(self.sort_tiles(tiles), self.num_cols)
+        self.num_rows = len(self.rows)
+        return self
+
+
+
+
+    def determine_offset(self):
+        """Use pyglet to allow users to set offset between tiles"""
+        #x = self.num_cols / 2
+        #y = self.num_rows / 2
+        pass
+
+
+
+
+
+
+    def mandolin(self, lst, n):
+        """Split list into groups of n members"""
+        return [lst[i*n:(i+1)*n] for i in range(len(lst) / n)]
+
+
+
+
+    def sort_tiles(self, tiles):
+        """Sort tiles based on patterns in filename"""
+        at_coordinates = re.compile('@(\d+) (\d+)')
+        return natsorted(tiles)
+
+
+
+'''
 
 
 def custom_setting(path):
@@ -47,7 +160,7 @@ def custom_setting(path):
     #prompt user for number of columns
     loop = True
     while loop:
-        num_cols = raw_input('Number of columns: ') 
+        num_cols = raw_input('Number of columns: ')
         if num_cols.isdigit():
             print 'The raster contains ' + num_cols + ' columns'
             loop = False
@@ -62,7 +175,7 @@ def custom_setting(path):
     print '-' * 60
     loop = True
     while loop:
-        mag = raw_input('Magnification (ex. 2.5): ') 
+        mag = raw_input('Magnification (ex. 2.5): ')
         if is_number(mag):
             print 'The images were collected at ' + mag + 'x magnification'
             loop = False
@@ -125,7 +238,7 @@ def custom_setting(path):
     os.remove(os.path.join(path, 'temp.jpg'))
     #return values as list
     return [num_cols, img, offset_col, offset_row, snake, '', mag]
-    
+
 
 def enq(s):
     #adds quotes to string
@@ -182,7 +295,7 @@ def get_rows(path, num_cols, snake):
         'ext' : {},
         'dim' : {},
         'bits' : {}
-        }           
+        }
     #notify user
     print '-' * 60 + '\nDirectory is ' + path
     d = os.path.basename(path)
@@ -249,7 +362,7 @@ def get_rows(path, num_cols, snake):
                 coordinates.append([f, c])
             except:
                 #assume alphabetical sort
-                coordinates.append([f, 0])                
+                coordinates.append([f, 0])
     #coordinates.sort(key=len)
     #coordinates.sort(key=lambda c: sorter(c[1]))
     rows = [[]]
@@ -274,7 +387,7 @@ def get_rows(path, num_cols, snake):
     rows = temp
     #return rows and ext as list
     return [rows, in_dim, in_ext, in_bits]
-    
+
 
 def scale_from_mag(mag, kind):
     #scalebar properties
@@ -339,7 +452,7 @@ def draw_label(this_file, w_full, h_full):
                #enq('NMNH ' + number + suffix + ' (' + kind +\
                #    str(int(w_full / px_per_mm)) + ' mm wide)'),
                '-annotate',
-               '+' + str(x1 + 100) + '+' + str(y1 + 80), 
+               '+' + str(x1 + 100) + '+' + str(y1 + 80),
                enq('5 mm'),
                '-fill',
                'black',
@@ -371,7 +484,7 @@ def draw_label(this_file, w_full, h_full):
          cmd = ['-pointsize',
                str(font_size),
                '-annotate',
-               '+' + str(120) + '+' + str(y1 + 80), 
+               '+' + str(120) + '+' + str(y1 + 80),
                enq('' + number + suffix +\
                    ' (' + kind.strip(' ').strip(',') + ')')]
     #return command
@@ -454,7 +567,7 @@ try:
         os.makedirs(os.path.join('config', 'users', user))
     except:
         # User directory already exists
-        pass                    
+        pass
     fp = os.path.join('config', 'users', user, 'settings.txt')
     try:
         with open(fp, 'rb'): pass
@@ -498,7 +611,7 @@ try:
         src = os.path.join('config', 'settings.txt')
         dst = fp
         shutil.copy2(src, dst)
-            
+
 
     # Read regex for use in sorter function from file_sort_regex.txt
     regex = []
@@ -544,7 +657,7 @@ try:
                     key = row[0]
                     val = row[1]
                     scope_type[key] = val
-    
+
     #set working variables
     #working_dir = os.path.join(base_dir, 'Workflows', 'Mosaics')
     working_dir = base_dir
@@ -778,7 +891,6 @@ try:
             ####################################################################
             # BEGIN MEMORY ADJUSTMENT
             ####################################################################
-            '''
             #check mosaic size against system memory
             #The working copy of an image used by ImageMagick must be
             #written to RAM or it will take forever to finish. You can
@@ -826,7 +938,6 @@ try:
                       str(w_full) + ' px wide and ' +\
                       str(h_full) + ' px high\n' +\
                       '-' * 60
-            '''
             ####################################################################
             # END MEMORY ADJUSTMENT
             ####################################################################
@@ -875,7 +986,7 @@ try:
                 #add row file to command
                 cmd += ['-transparent',
                         'white',
-                        enq(this_row)] 
+                        enq(this_row)]
                 #execute row command
                 #print ' '.join(cmd)
                 cmd = shlex.split(' '.join(cmd))
@@ -1024,3 +1135,4 @@ else:
     #notfy user that script completed successfully
     print '-' * 60
     raw_input('Done! Press any key to exit.')
+'''
