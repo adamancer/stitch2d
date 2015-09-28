@@ -1,0 +1,14 @@
+################################################################################
+# Regular expressions defined in this file are used to sort tilesets where
+# column and row information is buried somewhere in the filename.
+################################################################################
+# Parameters:
+#   Pattern: Regular expression used to sort. Must return two coordinates.
+#   RowIsFirst: Row number is the first coordinate.
+################################################################################
+#"\[Grid@(\d\d?) (\d\d?)\]",No
+#"\[ZAPgrid@(\d\d?) (\d\d?)\]",No
+"\@(\d\d?) (\d\d?)\]",No
+"^(\d)-(\d)$",Yes
+"-(\d{5,5})$",Yes
+"\[Point@(\d\d?\d?)\]",Yes

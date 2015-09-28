@@ -1,0 +1,8 @@
+################################################################################
+# Global settings file for mosaic.py
+################################################################################
+PATH_ROOT=C:\MinSci\Workflows\Mosaics
+OUTPUT=quiet
+KEEP_ROWS=No
+RAISE_ERROR=Yes
+ADD_LABEL=Yes

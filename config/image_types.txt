@@ -1,0 +1,23 @@
+################################################################################
+# 
+################################################################################ 
+"unspecified","unspecified image type"
+"ref","petrographic microscope, reflected light"
+"trans","petrographic microscope, transmitted light"
+"xpol","petrographic microscope, cross-polarized light"
+"bsed","SEM, backscatter"
+"nbsed","SEM, normalized backscatter"
+"etd","SEM, secondary electron"
+"sed","SEM, secondary electron"
+"cl","cathodoluminescence"
+"Al","SEM x-ray map, Al"
+"Ca","SEM x-ray map, Ca"
+"Cr","SEM x-ray map, Cr"
+"Fe","SEM x-ray map, Fe"
+"K","SEM x-ray map, K"
+"Mg","SEM x-ray map, Mg"
+"Mn","SEM x-ray map, Mn"
+"Na","SEM x-ray map, Na"
+"S","SEM x-ray map, S"
+"Si","SEM x-ray map, Si"
+"Ti","SEM x-ray map, Ti"

@@ -1,0 +1,4 @@
+Calibration mode
+Pet 2.5x;8;1280x960;-65x8;8x111;True;False;2.5
+Pet 5x;14;1280x960;-20x30;24x445;True;False;5
+SEM;17;1024x884;-146x5;-3x143;False;False;100
