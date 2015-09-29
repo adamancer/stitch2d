@@ -70,7 +70,7 @@ class Selector(object):
                         else:
                             break
                         params[key] = '{}x{}'.format(vals[0], vals[1])
-                        
+
         else:
             params = {}
             params['ul'] = self.prompt('Upper left:',
@@ -82,15 +82,15 @@ class Selector(object):
             params['z'] = self.prompt('z:', '\d+', False)
             params['mag'] = self.prompt('Magnification:', '\d+', False)
             params['mystery_int'] = 6357060
-            
+
         ul = [decimal.Decimal(x) for x in params['ul'].split('x')]
         lr = [decimal.Decimal(x) for x in params['lr'].split('x')]
         z = decimal.Decimal(params['z'])
         mag = params['mag']
         mystery_int = params['mystery_int']
         return (ul, lr, z, mag, mystery_int)
-        
-        
+
+
 
 
 
@@ -122,7 +122,7 @@ class Selector(object):
             break
         self.tiles_per_row = len(row)
         self.tiles_per_col = len(col)
-        
+
         self.coordinate_width = (abs(self.ul[0] - self.lr[0]) /
                                  (self.tiles_per_row - 1))
         self.coordinate_height = (abs(self.ul[1] - self.lr[1])  /
@@ -179,6 +179,7 @@ class Selector(object):
             window.clear()
             batch.draw()
 
+
         @window.event
         def on_close():
             i = 0
@@ -228,14 +229,14 @@ class Selector(object):
                           else '0' for c in coords]
                 fn = '*@' + coords[1] + ' ' + coords[0] + '].tif'
                 src = glob.glob(os.path.join(self.source, fn))[0]
-                dst = os.path.join(self.placeholders, os.path.basename(src))    
+                dst = os.path.join(self.placeholders, os.path.basename(src))
                 shutil.copy2(src, dst)
             window.close()
             pyglet.app.exit()
             shutil.rmtree(self.working)
-            raw_input('Done! Press any key to exit.')   
+            raw_input('Done! Press any key to exit.')
 
-                        
+
 
 
         @window.event
@@ -246,7 +247,7 @@ class Selector(object):
                     and sprite_y < y < sprite_y + sprite.height):
                     sprite.color = (255, 0, 0)
                 else:
-                    sprite.color = (255, 255, 255)            
+                    sprite.color = (255, 255, 255)
 
         pyglet.app.run()
 
@@ -291,7 +292,7 @@ class Selector(object):
             os.makedirs(os.path.join('config', 'users', user))
         except:
             # User directory already exists
-            pass                    
+            pass
         fp = os.path.join('config', 'users', user, 'settings.txt')
         try:
             open(fp, 'rb')
@@ -334,10 +335,10 @@ class Selector(object):
             src = os.path.join('config', 'settings.txt')
             dst = fp
             shutil.copy2(src, dst)
-                        
-    
-                
-    
+
+
+
+
     def prompt(self, prompt, validator, confirm=True,
                helptext='No help text provided', errortext='Invalid response!'):
         """Prompts user and validates response based on validator
@@ -367,7 +368,7 @@ class Selector(object):
         loop = True
         while loop:
             # Print options
-            if isinstance(validator, list):                         
+            if isinstance(validator, list):
                 print '{}\n{}'.format('\n'.join(options), self.boundary)
             # Prompt for value
             a = raw_input(prompt).decode(sys.stdin.encoding)
@@ -421,6 +422,3 @@ class Selector(object):
 selector = Selector()
 params = selector.get_job_settings()
 selector.select(*params)
-
-
-

@@ -24,8 +24,8 @@ def get_name(f):
     else:
         return None
 
-    
-    
+
+
 #regular expressions to capture sample information
 re_grid = re.compile('\[.+\]')
 re_specimen = re.compile('[^\[]+')
@@ -37,27 +37,24 @@ for f in glob.iglob(os.path.join('*.tif')):
     #get directory name
     d = get_name(os.path.basename(f))
     if d:
-        #create directory if neccesary
+        # Create directory if neccesary
         try:
             os.mkdir(os.path.join(get_root(), 'Workflows', 'Mosaics', d))
         except:
             pass
         else:
             print 'Creating {}'.format(d)
-        #move file into directory
+        # Move file into proper directory
         src = os.path.join(os.getcwd(), f)
         dst = os.path.join(get_root(), 'Workflows', 'Mosaics', d, f)
         try:
             open(dst, 'rb')
         except:
-            print 'Copying {}...'.format(os.path.basename(dst)) 
+            print 'Copying {}...'.format(os.path.basename(dst))
             shutil.copy2(src, dst)
         else:
-            pass#print '{} already exists!'.format(os.path.basename(dst))
+            #print '{} already exists!'.format(os.path.basename(dst))
+            pass
 
 #notify user that script is complete
 raw_input('Done! Press any key to exit.')
-    
-    
-    
-        
