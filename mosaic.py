@@ -27,7 +27,7 @@ except:
 
 from natsort import natsorted
 
-import minsci
+from ..helpers import prompt
 
 
 #-------------------------------------------------------------------------------
@@ -60,10 +60,10 @@ class Mosaic(object):
     def set_parameters(self):
         """Prompt user for job parameters"""
         yes_no = {'y' : True, 'n' : False}
-        self.num_cols = int(minsci.prompt('Number of columns:', '\d+'))
-        self.mag = int(minsci.prompt('Magnification:', '\d+'))
-        self.snake = minsci.prompt('Snake pattern?', yes_no)
-        if not minsci.prompt('Are these parameters okay?', yes_no):
+        self.num_cols = int(prompt('Number of columns:', '\d+'))
+        self.mag = int(prompt('Magnification:', '\d+'))
+        self.snake = prompt('Snake pattern?', yes_no)
+        if not prompt('Are these parameters okay?', yes_no):
             self.set_parameters()
         else:
             return self
