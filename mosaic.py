@@ -58,6 +58,7 @@ class Mosaic(object):
 
 
     def set_parameters(self):
+        """Prompt user for job parameters"""
         yes_no = {'y' : True, 'n' : False}
         self.num_cols = int(minsci.prompt('Number of columns:', '\d+'))
         self.mag = int(minsci.prompt('Magnification:', '\d+'))
@@ -116,10 +117,25 @@ class Mosaic(object):
 
 
 
-    def determine_offset(self):
+    def determine_offset(self, same_row=True):
         """Use pyglet to allow users to set offset between tiles"""
-        #x = self.num_cols / 2
-        #y = self.num_rows / 2
+        y = self.num_rows / 2
+        x = self.num_cols / 2
+        try:
+            t1 = self.rows[y][x]
+            t2 = self.rows[y][x]
+        except:
+            pass
+        if same_row:
+            img = Image.new('RGB', (self.w * 2, self.h * 1.1))
+            img.paste(Image.open(f1), (0, 0))
+            img.paste(Image.open(f2), (self.w, 0))
+        else:
+            img = Image.new('RGB', (self.w * 1.1, self.h * 2))
+            img.paste(Image.open(f1), (0, 0))
+            img.paste(Image.open(f2), (0, self.h))
+        # Resize image to fit in the current screen
+        img.resize()
         pass
 
 
