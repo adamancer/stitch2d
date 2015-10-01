@@ -172,11 +172,11 @@ class Mosaic(object):
 
 
     def create_mosaic(self):
-        # The dimensions of the mosaic are determined by the
-        # tile dimensions MINUS the offset
         self.rows = self.mandolin(tiles, self.num_cols)
         self.num_rows = len(self.rows)
-
+        # The dimensions of the mosaic are determined by the
+        # tile dimensions MINUS the offset within the row
+        # PLUS the offset between rows.
         x_offset_within_row = 10
         x_offset_between_rows = 10
         mosaic_width = ((self.w - x_offset_within_row)  * self.num_cols +
@@ -186,6 +186,9 @@ class Mosaic(object):
         mosaic_height = ((self.h + y_offset_within_row) * self.num_cols +
                          y_offset_between_rows * self.num_rows
         mosaic = Image.new('RGB', (mosaic_width, mosaic_height))
+        # Now that the canvas has been created, we can paste the
+        # individual tiles on top of it. We need to pay attention
+        # to the direction of the offsets.
         y = 0
         for row in self.rows:
             if self.snake and not (y + 1) % 2:
@@ -204,6 +207,13 @@ class Mosaic(object):
 
     def determine_offset(self, same_row=True):
         """Use pyglet to allow users to set offset between tiles"""
+        # Offsets are defined as follows:
+        #  Within row: y is positive if the top edge of the right
+        #   tile is HIGHER than that of the left (stair step up).
+        #   Because there is overlap, x is always positive.
+        #  Between rows: x is positive if the left edge of the lower
+        #   tile is to the RIGHT of the upper tile. Because there is
+        #   overlap, y is always positive.
         y = self.num_rows / 2
         x = self.num_cols / 2
         try:
