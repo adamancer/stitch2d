@@ -69,10 +69,41 @@ class Mosaic(object):
 
 
 
-    def set_parameters(self):
+    def get_tile_parameters(self, path):
+        """Determine parameters for tiles in path"""
+        exts = Counter()
+        dims = Counter()
+        tiles = []
+        for fn in os.listdir(path):
+            fp = os.path.join(path, fn)
+            try:
+                img = Image.open(fp)
+            except:
+                continue
+            else:
+                exts.add(os.path.splitext(fn)[1])
+                dims.add('x'.join([str(x) for x in img.size]))
+                tiles.append(fp)
+        self.ext = [key for key in exts
+                    if exts[key] == max(exts.values())][0].lower()
+        self.dim = [key for key in dims
+                    if dims[key] == max(dims.values())][0]
+        self.w, self.h = [int(x) for x in self.dim.split('x')]
+        self.name = os.path.dirname(path)
+        self.tiles = self.sort_tiles([tile for tile in tiles
+                                      if tile.endswith(self.ext)])
+        return self
+
+
+
+
+    def set_mosaic_parameters(self):
         """Prompt user for job parameters"""
         yes_no = {'y' : True, 'n' : False}
-        self.num_cols = int(prompt('Number of columns:', '\d+'))
+        try:
+            self.num_cols
+        except UnboundLocalVariable:
+            self.num_cols = int(prompt('Number of columns:', '\d+'))
         self.mag = int(prompt('Magnification:', '\d+'))
         self.snake = prompt('Snake pattern?', yes_no)
         if not prompt('Are these parameters okay?', yes_no):
@@ -127,45 +158,14 @@ class Mosaic(object):
                 i = int(key)
             temp[i] = tile
         # Bonus: Determine the number of columns if the tiles are
-        # provided with SEM-style grid notation
+        # provided with SEM-style grid notation. This is kind of an
+        # odd fit here, but I don't know where else to put it.
         try:
             self.num_cols = max(cols) + 1
         except UnboundLocalVariable:
             pass
         return [temp[key] for key in sorted(temp.keys())]
 
-
-
-
-    def classify_tiles(self, path):
-        """Determine parameters for tiles in path"""
-        exts = Counter()
-        dims = Counter()
-        tiles = []
-        for fn in os.listdir(path):
-            fp = os.path.join(path, fn)
-            try:
-                img = Image.open(fp)
-            except:
-                continue
-            else:
-                exts.add(os.path.splitext(fn)[1])
-                dims.add('x'.join([str(x) for x in img.size]))
-                tiles.append(fp)
-        self.ext = [key for key in exts
-                    if exts[key] == max(exts.values())][0].lower()
-        self.dim = [key for key in dims
-                    if dims[key] == max(dims.values())][0]
-        self.w, self.h = [int(x) for x in self.dim.split('x')]
-        self.name = os.path.dirname(path)
-        return self
-
-
-
-    def list_tiles(self):
-        """Get list of tiles with proper extension"""
-        return self.sort_tiles([tile for tile in tiles
-                                if tile.endswith(self.ext)])
 
 
 
