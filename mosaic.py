@@ -89,6 +89,7 @@ class Mosaic(object):
 
 
 
+
     def classify_tiles(self, path):
         """Determine parameters for tiles in path"""
         exts = Counter()
@@ -141,19 +142,67 @@ class Mosaic(object):
 
 
 
-
-
     def mandolin(self, lst, n):
-        """Split list into groups of n members"""
+        """Split list into groups of n members
+
+        @param list
+        @param int
+        @return list
+        """
         return [lst[i*n:(i+1)*n] for i in range(len(lst) / n)]
 
 
 
 
     def sort_tiles(self, tiles):
-        """Sort tiles based on patterns in filename"""
-        at_coordinates = re.compile('@(\d+) (\d+)')
-        return natsorted(tiles)
+        """Identify iterator in filename and sort
+
+        @param list
+        @return list
+
+        The iterator is the part of the filename that changes
+        between files in the same set of tiles. Typically the
+        interator will be an integer (abc-1.jpg or abc-001.jpg)
+        or, using the SEM, a column-row pair (abc_Grid[@0 0].jpg).
+        """
+        # First we identify this iterator by finding which parts
+        # of the string are constant across the tileset.
+        starts_with = []
+        ends_with = []
+        i = 0
+        while i < len(tiles):
+            j = 0
+            while tiles[i][j] == tiles[i-1][j]:
+                j += 1
+            starts_with.append(j)
+            j = 0
+            while tiles[i][::-1][j] == tiles[i-1][::-1][j]:
+                j += 1
+            ends_with.append(j)
+            i += 1
+        starts = tiles[0][:min(starts_with)]
+        ends = tiles[0][len(tiles[0])-min(ends_with):]
+        # Now we handle the two cases described above (iterator and
+        # column-row pair). Note that the script is quite simple
+        # in its handling of coordinates--for example, it does not
+        # handle row-column pairs or column-row pairs joined by an "x."
+        temp = {}
+        for tile in tiles:
+            key = tile.replace(starts, '', 1).replace(ends, '', 1)
+            if ' ' in key:
+                x, y = key.split(' ')
+                i = int(y) * self.num_cols + int(x)
+            else:
+                i = int(key)
+            temp[i] = tile
+        return [temp[key] for key in sorted(temp.keys())]
+
+
+
+
+    def patch_tiles(self, tiles):
+        """Patch tileset with blank tiles from mosaic.Selector"""
+        pass
 
 
 
