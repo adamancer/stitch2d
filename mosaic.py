@@ -34,6 +34,7 @@ from ..helpers import prompt
 #-FUNCTION DEFINITIONS----------------------------------------------------------
 #-------------------------------------------------------------------------------
 
+
 class Counter(dict):
 
     def add(self, key, val=1):
@@ -41,6 +42,8 @@ class Counter(dict):
             self[key] += val
         except:
             self[key] = val
+
+
 
 
 class Mosaic(object):
@@ -53,6 +56,15 @@ class Mosaic(object):
             '.tif' : 'TIFF',
             '.tiff' : 'TIFF'
         }
+
+
+
+
+    def stitch(self):
+        """Calls parameters in proper order"""
+        self.set_parameters()
+        self.classify_tiles()
+        self.list_tiles()
 
 
 
@@ -71,21 +83,56 @@ class Mosaic(object):
 
 
 
-    def create_mosaic(self):
-        mosaic_width = self.w * self.num_cols
-        mosaic_height = self.h * self.num_rows
-        mosaic = Image.new('RGB', (mosaic_width, mosaic_height))
-        y = 0
-        for row in self.rows:
-            if self.snake and not (y + 1) % 2:
-                row = row[::-1]
-            x = 0
-            for fp in row:
-                mosaic.paste(Image.open(fp), (self.w * x, self.h * y))
-                x += 1
-            y += 1
-        mosaic.save(self.name + self.ext, self.extmap[self.ext])
+    def sort_tiles(self, tiles):
+        """Identify iterator in filename and sort
 
+        @param list
+        @return list
+
+        The iterator is the part of the filename that changes
+        between files in the same set of tiles. Typically the
+        interator will be an integer (abc-1.jpg or abc-001.jpg)
+        or, using the SEM, a column-row pair (abc_Grid[@0 0].jpg).
+        """
+        # First we identify this iterator by finding which parts
+        # of the string are constant across the tileset.
+        starts_with = []
+        ends_with = []
+        i = 0
+        while i < len(tiles):
+            j = 0
+            while tiles[i][j] == tiles[i-1][j]:
+                j += 1
+            starts_with.append(j)
+            j = 0
+            while tiles[i][::-1][j] == tiles[i-1][::-1][j]:
+                j += 1
+            ends_with.append(j)
+            i += 1
+        starts = tiles[0][:min(starts_with)]
+        ends = tiles[0][len(tiles[0])-min(ends_with):]
+        # Now we handle the two cases described above (number and
+        # column-row pair). Note that the script is quite simple
+        # in its handling of coordinates--for example, it does not
+        # handle row-column pairs or column-row pairs joined by an "x."
+        temp = {}
+        cols = []
+        for tile in tiles:
+            key = tile.replace(starts, '', 1).replace(ends, '', 1)
+            if ' ' in key:
+                x, y = key.split(' ')
+                i = int(y) * self.num_cols + int(x)
+                cols.append(y)
+            else:
+                i = int(key)
+            temp[i] = tile
+        # Bonus: Determine the number of columns if the tiles are
+        # provided with SEM-style grid notation
+        try:
+            self.num_cols = max(cols) + 1
+        except UnboundLocalVariable:
+            pass
+        return [temp[key] for key in sorted(temp.keys())]
 
 
 
@@ -111,9 +158,46 @@ class Mosaic(object):
                     if dims[key] == max(dims.values())][0]
         self.w, self.h = [int(x) for x in self.dim.split('x')]
         self.name = os.path.dirname(path)
-        self.rows = self.mandolin(self.sort_tiles(tiles), self.num_cols)
-        self.num_rows = len(self.rows)
         return self
+
+
+
+    def list_tiles(self):
+        """Get list of tiles with proper extension"""
+        return self.sort_tiles([tile for tile in tiles
+                                if tile.endswith(self.ext)])
+
+
+
+
+
+    def create_mosaic(self):
+        # The dimensions of the mosaic are determined by the
+        # tile dimensions MINUS the offset
+        self.rows = self.mandolin(tiles, self.num_cols)
+        self.num_rows = len(self.rows)
+
+        x_offset_within_row = 10
+        x_offset_between_rows = 10
+        mosaic_width = ((self.w - x_offset_within_row)  * self.num_cols +
+                        x_offset_between_rows * self.num_rows)
+        y_offset_within_row = 10
+        y_offset_between_rows = 10
+        mosaic_height = ((self.h + y_offset_within_row) * self.num_cols +
+                         y_offset_between_rows * self.num_rows
+        mosaic = Image.new('RGB', (mosaic_width, mosaic_height))
+        y = 0
+        for row in self.rows:
+            if self.snake and not (y + 1) % 2:
+                row = row[::-1]
+            x = 0
+            for fp in row:
+                if bool(fp):
+                    mosaic.paste(Image.open(fp), (self.w * x, self.h * y))
+                x += 1
+            y += 1
+        mosaic.save(self.name + self.ext, self.extmap[self.ext])
+
 
 
 
@@ -154,54 +238,8 @@ class Mosaic(object):
 
 
 
-    def sort_tiles(self, tiles):
-        """Identify iterator in filename and sort
-
-        @param list
-        @return list
-
-        The iterator is the part of the filename that changes
-        between files in the same set of tiles. Typically the
-        interator will be an integer (abc-1.jpg or abc-001.jpg)
-        or, using the SEM, a column-row pair (abc_Grid[@0 0].jpg).
-        """
-        # First we identify this iterator by finding which parts
-        # of the string are constant across the tileset.
-        starts_with = []
-        ends_with = []
-        i = 0
-        while i < len(tiles):
-            j = 0
-            while tiles[i][j] == tiles[i-1][j]:
-                j += 1
-            starts_with.append(j)
-            j = 0
-            while tiles[i][::-1][j] == tiles[i-1][::-1][j]:
-                j += 1
-            ends_with.append(j)
-            i += 1
-        starts = tiles[0][:min(starts_with)]
-        ends = tiles[0][len(tiles[0])-min(ends_with):]
-        # Now we handle the two cases described above (iterator and
-        # column-row pair). Note that the script is quite simple
-        # in its handling of coordinates--for example, it does not
-        # handle row-column pairs or column-row pairs joined by an "x."
-        temp = {}
-        for tile in tiles:
-            key = tile.replace(starts, '', 1).replace(ends, '', 1)
-            if ' ' in key:
-                x, y = key.split(' ')
-                i = int(y) * self.num_cols + int(x)
-            else:
-                i = int(key)
-            temp[i] = tile
-        return [temp[key] for key in sorted(temp.keys())]
-
-
-
-
     def patch_tiles(self, tiles):
-        """Patch tileset with blank tiles from mosaic.Selector"""
+        """Patch tileset with blanks based on mosaic.Selector"""
         pass
 
 
