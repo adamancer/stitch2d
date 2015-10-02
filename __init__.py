@@ -1,1 +1,1 @@
-from .mosaic import Mosaic
+from .mosaic import Mosaic, mosey
