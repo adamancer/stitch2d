@@ -354,3 +354,14 @@ class Mosaic(object):
             tiles.append(sequence[i])
         #print '\n'.join(tiles)
         return tiles
+
+
+
+def mosey(paths):
+    """Helper function"""
+    for path in paths:
+        print 'New dir: {}'.format(os.path.basename(path))
+        try:
+            mosaic.create_mosaic(path)
+        except NameError:
+            mosaic = Mosaic(path).create_mosaic()
