@@ -17,31 +17,26 @@ from PIL import Image
 class Selector(object):
 
 
-    def __init__(self):
+    def __init__(self, ext='.tif'):
 
         decimal.getcontext().prec = 6
 
-        # Read user settings file
-        self.get_settings()
+        root = Tkinter.Tk()
+        root.withdraw()
+        title = ("Please select the directory containing your tiles:")
+        initial = os.path.expanduser('~')
+        self.path = tkFileDialog.askdirectory(parent=root, title=title,
+                                              initialdir=initial)
 
-        tiles = [d for d in os.listdir(self.path)
-                 if os.path.isdir(os.path.join(self.path, d))
-                 and not d in ['output', 'working']][0]
+        tiles = [fp for fp in glob.glob(os.path.join(path, '*' + ext))]
         self.source = os.path.join(self.path, tiles)
 
-        output = os.path.join(self.path, 'output')
-        self.working = os.path.join(output, 'working')
-        self.placeholders = os.path.join(output, 'placeholders')
-        try:
-            os.makedirs(self.working)
-            os.mkdir(self.placeholders)
-        except:
-            shutil.rmtree(output)
-            os.makedirs(self.working)
-            os.mkdir(self.placeholders)
-
+        # Get window dimensions. These will be used to set the size of
+        # the pyglet window later.
         self.window_width = ctypes.windll.user32.GetSystemMetrics(0) - 200
         self.window_height = ctypes.windll.user32.GetSystemMetrics(1) - 200
+
+
 
 
     def get_job_settings(self):
