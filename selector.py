@@ -15,6 +15,7 @@ import pyglet
 from PIL import Image
 
 from .mosaic import mandolin
+from ..helpers import prompt
 
 
 
@@ -75,14 +76,14 @@ class Selector(object):
 
         else:
             params = {}
-            params['ul'] = self.prompt('Upper left:',
-                                       '-?\d+(\.\d+)?x-?\d+(\.\d+)?',
-                                       False)
-            params['lr'] = self.prompt('Lower right:',
-                                       '-?\d+(\.\d+)?x-?\d+(\.\d+)?',
-                                       False)
-            params['z'] = self.prompt('z:', '\d+', False)
-            params['mag'] = self.prompt('Magnification:', '\d+', False)
+            params['ul'] = prompt('Upper left:',
+                                  '-?\d+(\.\d+)?x-?\d+(\.\d+)?',
+                                  False)
+            params['lr'] = prompt('Lower right:',
+                                  '-?\d+(\.\d+)?x-?\d+(\.\d+)?',
+                                  False)
+            params['z'] = prompt('z:', '\d+', False)
+            params['mag'] = prompt('Magnification:', '\d+', False)
             params['mystery_int'] = 6357060
 
         ul = [decimal.Decimal(x) for x in params['ul'].split('x')]
@@ -112,23 +113,23 @@ class Selector(object):
             try:
                 key = os.path.splitext(fp)[0].split('@')[1].rstrip(']')
             except IndexError:
-                raw_input("Malformatted filename: Check tiles for images"
-                          " that aren't part of the grid")
+                raw_input("Malformatted filename: Check folder for"
+                          " images that aren't part of the grid")
                 raise
             x, y = key.split(' ')
             cols.append(int(x))
             w, h = img.size
-            grid[key] = copy(img)
+            grid[key] = (copy(img), fp)
 
         self.num_cols = max(cols) + 1
         self.num_rows = len(grid) / self.num_cols
 
-        print self.num_cols, self.num_rows
-
+        filenames = {}
         for key in grid.keys():
             x, y = key.split(' ')
             i = int(x) + self.num_cols * int(y)
-            grid[i] = grid[key]
+            grid[i] = grid[key][0]
+            filenames[i] = grid[key][1]
             del grid[key]
 
         self.coordinate_width = (abs(self.ul[0] - self.lr[0]) /
@@ -248,6 +249,15 @@ class Selector(object):
                 n_col, n_row = tile
                 i = n_col + self.num_cols * n_row
                 indexes.append(i)
+                # Move tiles into subfolder
+                src = filenames[i]
+                dst = os.path.join(self.source, 'skipped',
+                                   os.path.basename(src))
+                try:
+                    shutil.move(src, dst)
+                except:
+                    os.mkdir(os.path.dirname(dst))
+                    shutil.move(src, dst)
             with open(fp, 'wb') as f:
                 f.write('\n'.join([str(i) for i in sorted(indexes)]))
             fp = os.path.join(self.source, 'selected.jpg')
@@ -280,84 +290,3 @@ class Selector(object):
         center = (self.ul[0] + self.coordinate_width * x,
                   self.ul[1] - self.coordinate_height * y)
         return center
-
-
-
-
-    def prompt(self, prompt, validator, confirm=True,
-               helptext='No help text provided', errortext='Invalid response!'):
-        """Prompts user and validates response based on validator
-
-        Keyword arguments:
-        Validator can be a str, list, or dict
-        """
-        # Prepare string
-        prompt = '{} '.format(prompt.rstrip())
-        try:
-            prompt = unicode(prompt)
-        except:
-            pass
-        # Prepare validator
-        if isinstance(validator, (str, unicode)):
-            validator = re.compile(validator, re.U)
-        elif isinstance(validator, dict):
-            prompt = '{}({}) '.format(prompt, '/'.join(validator.keys()))
-        elif isinstance(validator, list):
-            options = ['{}. {}'.format(x + 1, validator[x])
-                       for x in xrange(0, len(validator))]
-        else:
-            raw_input(fill('Error in minsci.helpers.prompt: '
-                           'Validator must be dict, list, or str.'))
-            raise
-        # Validate response
-        loop = True
-        while loop:
-            # Print options
-            if isinstance(validator, list):
-                print '{}\n{}'.format('\n'.join(options), self.boundary)
-            # Prompt for value
-            a = raw_input(prompt).decode(sys.stdin.encoding)
-            if a.lower() == 'q':
-                print 'User exited prompt'
-                sys.exit()
-            elif a.lower() == '?':
-                print '-' * 60 + '\n' + fill(helptext) + '\n' + '-' * 60
-                continue
-            elif isinstance(validator, list):
-                try:
-                    i = int(a) - 1
-                    result = validator[i]
-                except:
-                    pass
-                else:
-                    if i >= 0:
-                        loop = False
-            elif isinstance(validator, dict):
-                try:
-                    result = validator[a]
-                except:
-                    pass
-                else:
-                    loop = False
-            else:
-                try:
-                    validator.search(a).group()
-                except:
-                    pass
-                else:
-                    result = a
-                    loop = False
-            # Confirm value, if required
-            if confirm and not loop:
-                try:
-                    result = unicode(result)
-                except:
-                    result = str(result)
-                loop = self.prompt('Is this value correct: '
-                                   '"{}"?'.format(result),
-                                   {'y' : False, 'n' : True},
-                                   confirm=False)
-            elif loop:
-                print '-' * 60 + '\n' + fill(errortext) + '\n' + '-' * 60
-        # Return value as unicode
-        return result
