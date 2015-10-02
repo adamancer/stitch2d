@@ -20,10 +20,10 @@ import urllib
 from datetime import datetime
 from math import floor, sqrt
 import offset
-try:
-    from PIL import Image
-except:
-    from pillow import Image
+from PIL import Image, ImageDraw, ImageFont
+
+import Tkinter
+import tkFileDialog
 
 from natsort import natsorted
 
@@ -50,21 +50,21 @@ class Mosaic(object):
 
 
     def __init__(self, path):
-        self.path = path
         self.extmap = {
             '.jpg' : 'JPEG',
             '.tif' : 'TIFF',
             '.tiff' : 'TIFF'
         }
+        self.stitch(path)
 
 
 
 
-    def stitch(self):
+    def stitch(self, path):
         """Calls parameters in proper order"""
-        self.set_parameters()
-        self.classify_tiles()
-        self.list_tiles()
+        self.get_tile_parameters(path)
+        self.set_mosaic_parameters()
+        self.create_mosaic()
 
 
 
@@ -101,15 +101,82 @@ class Mosaic(object):
         """Prompt user for job parameters"""
         yes_no = {'y' : True, 'n' : False}
         try:
-            self.num_cols
-        except UnboundLocalVariable:
+            print ('Number of columns detected from filenames'
+                   ' (n={})').format(self.num_cols)
+        except AttributeError:
             self.num_cols = int(prompt('Number of columns:', '\d+'))
         self.mag = int(prompt('Magnification:', '\d+'))
         self.snake = prompt('Snake pattern?', yes_no)
-        if not prompt('Are these parameters okay?', yes_no):
-            self.set_parameters()
-        else:
+        self.rows = self.mandolin(self.tiles, self.num_cols)
+        self.num_rows = len(self.rows)
+        self.determine_offset()
+        if prompt('Are these parameters okay?', yes_no):
             return self
+        else:
+            del self.num_cols
+            self.set_mosaic_parameters()
+
+
+
+
+    def create_mosaic(self, label=True):
+        """Create a mosaic from a set a tiles with known, fixed offsets"""
+        # The dimensions of the mosaic are determined by the
+        # tile dimensions minus the offsets between rows and
+        # columns. Some general notes:
+        #   * The origin is in the upper left
+        #   * Offsets are always applied as n - 1 because they occur
+        #     between tiles
+        mosaic_width = (self.w * self.num_cols +
+                        self.x_offset_within_row * (self.num_cols - 1) +
+                        abs(self.x_offset_between_rows) * (self.num_rows - 1))
+        mosaic_height = (self.h * self.num_rows +
+                         self.y_offset_between_rows * (self.num_rows - 1) +
+                         abs(self.y_offset_within_row) * (self.num_cols - 1))
+        if label:
+            label_height = int(mosaic_height * 0.04)
+            mosaic_height += label_height
+        print 'Mosaic will be {:,} by {:,} pixels'.format(mosaic_width,
+                                                          mosaic_height)
+        mosaic = Image.new('RGB', (mosaic_width, mosaic_height), (255,255,255))
+        # Now that the canvas has been created, we can paste the
+        # individual tiles on top of it. Coordinates increase from
+        # (0,0) in the top left corner.
+        n_row = 0  # index of row
+        for row in self.rows:
+            if self.snake and not (n_row + 1) % 2:
+                row = row[::-1]
+            n_col = 0  # index of column
+            for fp in row:
+                if bool(fp):
+                    # Calculate x coordinate
+                    x = ((self.w + self.x_offset_within_row) * n_col +
+                         self.x_offset_between_rows * n_row)
+                    if self.x_offset_between_rows < 0:
+                        x -= self.x_offset_between_rows * (self.num_rows - 1)
+                    # Calculate y coordinate
+                    y = ((self.h + self.y_offset_between_rows) * n_row +
+                         self.y_offset_within_row * n_col)
+                    if self.y_offset_within_row < 0:
+                        y -= self.y_offset_within_row * (self.num_cols - 1)
+                    mosaic.paste(Image.open(fp), (x, y))
+                n_col += 1
+            n_row += 1
+        # Add label
+        if label:
+            text = self.name[0].upper() + self.name[1:]
+            draw = ImageDraw.Draw(mosaic)
+            # Resize text to a reasonable size based on the
+            # dimensions of the mosaic
+            size = 100
+            font = ImageFont.truetype('Microsoft Sans Serif.ttf', size)
+            w, h = font.getsize(text)
+            size = int(0.8 * size * label_height / float(h))
+            font = ImageFont.truetype('Microsoft Sans Serif.ttf', size)
+            x = int(0.02 * mosaic_width)
+            y = mosaic_height - int(label_height)
+            draw.text((x, y), text, (0, 0, 0), font=font)
+        mosaic.save(self.name + '.tif', self.extmap[self.ext])
 
 
 
@@ -162,7 +229,7 @@ class Mosaic(object):
         # odd fit here, but I don't know where else to put it.
         try:
             self.num_cols = max(cols) + 1
-        except UnboundLocalVariable:
+        except (UnboundLocalError, ValueError):
             pass
         return [temp[key] for key in sorted(temp.keys())]
 
@@ -170,68 +237,23 @@ class Mosaic(object):
 
 
 
-
-    def create_mosaic(self):
-        self.rows = self.mandolin(tiles, self.num_cols)
-        self.num_rows = len(self.rows)
-        # The dimensions of the mosaic are determined by the
-        # tile dimensions MINUS the offset within the row
-        # PLUS the offset between rows.
-        x_offset_within_row = 10
-        x_offset_between_rows = 10
-        mosaic_width = ((self.w - x_offset_within_row)  * self.num_cols +
-                        x_offset_between_rows * self.num_rows)
-        y_offset_within_row = 10
-        y_offset_between_rows = 10
-        mosaic_height = ((self.h + y_offset_within_row) * self.num_cols +
-                         y_offset_between_rows * self.num_rows
-        mosaic = Image.new('RGB', (mosaic_width, mosaic_height))
-        # Now that the canvas has been created, we can paste the
-        # individual tiles on top of it. We need to pay attention
-        # to the direction of the offsets.
-        y = 0
-        for row in self.rows:
-            if self.snake and not (y + 1) % 2:
-                row = row[::-1]
-            x = 0
-            for fp in row:
-                if bool(fp):
-                    mosaic.paste(Image.open(fp), (self.w * x, self.h * y))
-                x += 1
-            y += 1
-        mosaic.save(self.name + self.ext, self.extmap[self.ext])
-
-
-
-
-
     def determine_offset(self, same_row=True):
         """Use pyglet to allow users to set offset between tiles"""
-        # Offsets are defined as follows:
+        # Coordinates increase from 0,0 in the upper left. Offsets
+        # are defined as follows:
         #  Within row: y is positive if the top edge of the right
         #   tile is HIGHER than that of the left (stair step up).
-        #   Because there is overlap, x is always positive.
+        #   Because tiles must be shifted left to overlap, x
+        #   is always negative.
         #  Between rows: x is positive if the left edge of the lower
-        #   tile is to the RIGHT of the upper tile. Because there is
-        #   overlap, y is always positive.
-        y = self.num_rows / 2
-        x = self.num_cols / 2
-        try:
-            t1 = self.rows[y][x]
-            t2 = self.rows[y][x]
-        except:
-            pass
-        if same_row:
-            img = Image.new('RGB', (self.w * 2, self.h * 1.1))
-            img.paste(Image.open(f1), (0, 0))
-            img.paste(Image.open(f2), (self.w, 0))
-        else:
-            img = Image.new('RGB', (self.w * 1.1, self.h * 2))
-            img.paste(Image.open(f1), (0, 0))
-            img.paste(Image.open(f2), (0, self.h))
-        # Resize image to fit in the current screen
-        img.resize()
-        pass
+        #   tile is to the RIGHT of the left edge of the upper tile.
+        #   Because tiles must be shifted up to overlap, y is
+        #   always negative.
+        self.x_offset_within_row = -100  # must be negative
+        self.x_offset_between_rows = -50
+        self.y_offset_within_row = -25
+        self.y_offset_between_rows = -124  # must be positive
+        return self
 
 
 
