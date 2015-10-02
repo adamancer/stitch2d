@@ -50,7 +50,7 @@ class Counter(dict):
 class Mosaic(object):
 
 
-    def __init__(self, path):
+    def __init__(self, path=None):
         # A quick list of properties of the Mosaic object:
         #  self.filename (str, specific)
         #  self.name (str, specific)
@@ -82,8 +82,8 @@ class Mosaic(object):
             self.image_types = dict([(row[0].lower(), row[1])
                                       for row in rows if bool(row[0])
                                       and not row[0].startswith('#')])
-        self.get_tile_parameters(path)
         self.set_mosaic_parameters()
+        self.get_tile_parameters(path)
 
 
 
@@ -117,9 +117,8 @@ class Mosaic(object):
         except KeyError:
             # Suffix was not recognized
             pass
-        self.tiles = self.sort_tiles([tile for tile in tiles
-                                      if tile.endswith(self.ext)])
-        return self
+        tiles = [tile for tile in tiles if tile.endswith(self.ext)]
+        self.handle_tiles(tiles)
 
 
 
@@ -128,10 +127,12 @@ class Mosaic(object):
         """Prompt user for job parameters"""
         yes_no = {'y' : True, 'n' : False}
         try:
-            print ('Number of columns detected from filenames'
-                   ' (n={})').format(self.num_cols)
-        except AttributeError:
+            self.num_cols
+        except:
             self.num_cols = int(prompt('Number of columns:', '\d+'))
+        else:
+            print ('Columns determined from'
+                   ' filenames (n={})').format(self.num_cols)
         self.mag = int(prompt('Magnification:', '\d+'))
         self.snake = prompt('Snake pattern?', yes_no)
         self.rows = self.mandolin(self.tiles, self.num_cols)
@@ -234,16 +235,20 @@ class Mosaic(object):
 
 
 
-    def sort_tiles(self, tiles):
-        """Identify iterator in filename and sort
+    def handle_tiles(self, tiles):
+        """Sorts and tests coherence of tileset
 
         @param list
         @return list
 
-        The iterator is the part of the filename that changes
+        The sort function works by deteteching the iterator, which
+        is defined here as the part of the filename that changes
         between files in the same set of tiles. Typically the
         interator will be an integer (abc-1.jpg or abc-001.jpg)
         or, using the SEM, a column-row pair (abc_Grid[@0 0].jpg).
+
+        This function also checks the coherence of the tile set
+        and warns users if tiles appear to be missing.
         """
         # First we identify this iterator by finding which parts
         # of the string are constant across the tileset.
@@ -271,20 +276,32 @@ class Mosaic(object):
         for tile in tiles:
             key = tile.replace(starts, '', 1).replace(ends, '', 1)
             try:
+                # Special case: SEM grid notation. We can use the
+                # coordinates in the grid to calculate the number
+                # of columns.
                 x, y = key.split(' ')
-                i = int(y) * self.num_cols + int(x)
                 cols.append(y)
+                i = key
             except ValueError:
                 i = key
             temp[i] = tile
-        # Bonus: Determine the number of columns if the tiles are
-        # provided with SEM-style grid notation. This is kind of an
-        # odd fit here, but I don't know where else to put it.
-        try:
+        if len(cols):
             self.num_cols = max(cols) + 1
-        except (UnboundLocalError, ValueError):
-            pass
-        return [temp[key] for key in sorted(temp.keys())]
+            for key in temp.keys():
+                x, y = key.split(' ')
+                i = int(y) * self.num_cols + int(x)
+                temp[i] = tile
+                del temp[key]
+        # Check the tileset for coherence
+        keys = temp.keys()
+        idealized_keys = set([x for x in xrange(min(keys), max(keys)+1)])
+        missing = idealized_keys - set(keys)
+        if len(missing):
+            print 'Warning: The following tiles appear to be missing:'
+            for key in sorted(missing):
+                print ' {}'.format(temp[key])
+        # Create tiles and rows
+        self.tiles = [temp[key] for key in sorted(temp.keys())]
 
 
 
@@ -305,7 +322,7 @@ class Mosaic(object):
         self.x_offset_within_row = -100  # must be negative
         self.x_offset_between_rows = -50
         self.y_offset_within_row = -25
-        self.y_offset_between_rows = -124  # must be positive
+        self.y_offset_between_rows = -124  # must be negative
         return self
 
 
@@ -357,10 +374,21 @@ class Mosaic(object):
 
 
 
-def mosey(paths):
+def mosey(path=None):
     """Helper function"""
-    for path in paths:
-        print 'New dir: {}'.format(os.path.basename(path))
+    if not path:
+        root = Tkinter.Tk()
+        root.withdraw()
+        title = ("Please select the directory containg the tilesets"
+                 " you'd like to stitch.")
+        initial = os.path.expanduser('~')
+        path = tkFileDialog.askdirectory(parent=root,
+                                         title=title,
+                                         initialdir=initial)
+    print path
+    for path in ([os.path.join(path, dn) for dn in os.listdir(path)
+                  if os.path.isdir(os.path.join(path, dn))]):
+        print 'New tileset: {}'.format(os.path.basename(path))
         try:
             mosaic.create_mosaic(path)
         except NameError:
