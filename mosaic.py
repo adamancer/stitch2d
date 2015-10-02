@@ -51,47 +51,39 @@ class Mosaic(object):
 
 
     def __init__(self, path):
-        # self.filename (str, specific)
-        # self.name (str, specific)
-        # self.tiles (list, specific)
-        # self.rows (int, specific)
-        # self.basepath (str, carries over)
-        # self.image_types (dict, carries over)
-        # self.extmap (dict, carries over)
-        # self.snake (bool, carries over)
-        # self.ext (str, carries over)
-        # self.w (int, carries over)
-        # self.h (int, carries over)
-        # self.mag (int, carries over)
-        # self.num_rows (int, carries over)
-        # self.num_cols (int, carries over)
-        # self.x_offset_within_row (int, carries over)
-        # self.x_offset_between_rows (int, carries over)
-        # self.y_offset_within_row (int, carries over)
-        # self.y_offset_between_rows (int, carries over)
-        if isinstance(previous_instance, Mosaic):
-            print 'Inheriting parameters from previous instance'
-            self = copy(previous_instance)
-            self.get_tile_parameters(path)
-            self.rows = self.mandolin(self.tiles, self.num_cols)
-            self.num_rows = len(self.rows)
-        else:
-            self.extmap = {
-                '.jpg' : 'JPEG',
-                '.tif' : 'TIFF',
-                '.tiff' : 'TIFF'
-            }
-            self.basepath = os.path.dirname(__file__)
-            self.image_types = {}
-            with open(os.path.join(self.basepath, 'config',
-                                   'image_types.txt')) as f:
-                rows = csv.reader(f, delimiter=',', quotechar='"')
-                self.image_types = dict([(row[0].lower(), row[1])
-                                          for row in rows if bool(row[0])
-                                          and not row[0].startswith('#')])
-            self.get_tile_parameters(path)
-            self.set_mosaic_parameters()
-        self.create_mosaic()
+        # A quick list of properties of the Mosaic object:
+        #  self.filename (str, specific)
+        #  self.name (str, specific)
+        #  self.tiles (list, specific)
+        #  self.rows (int, specific)
+        #  self.basepath (str, carries over)
+        #  self.image_types (dict, carries over)
+        #  self.extmap (dict, carries over)
+        #  self.snake (bool, carries over)
+        #  self.ext (str, carries over)
+        #  self.w (int, carries over)
+        #  self.h (int, carries over)
+        #  self.mag (int, carries over)
+        #  self.num_rows (int, carries over)
+        #  self.num_cols (int, carries over)
+        #  self.x_offset_within_row (int, carries over)
+        #  self.x_offset_between_rows (int, carries over)
+        #  self.y_offset_within_row (int, carries over)
+        #  self.y_offset_between_rows (int, carries over)
+        self.extmap = {
+            '.jpg' : 'JPEG',
+            '.tif' : 'TIFF',
+            '.tiff' : 'TIFF'
+        }
+        self.basepath = os.path.dirname(__file__)
+        self.image_types = {}
+        with open(os.path.join(self.basepath, 'files', 'image_types.txt')) as f:
+            rows = csv.reader(f, delimiter=',', quotechar='"')
+            self.image_types = dict([(row[0].lower(), row[1])
+                                      for row in rows if bool(row[0])
+                                      and not row[0].startswith('#')])
+        self.get_tile_parameters(path)
+        self.set_mosaic_parameters()
 
 
 
@@ -154,9 +146,16 @@ class Mosaic(object):
 
 
 
-    def create_mosaic(self, label=True):
+    def create_mosaic(self, path=None, label=True):
         """Create a mosaic from a set a tiles with known, fixed offsets"""
         start_time = datetime.now()
+        # Folder-specific parameters are cleared when the mosaic is
+        # done stitching, but most parameters carry over, allowing a
+        # bunch of mosaics to be run at once with the same settings.
+        if path:
+            self.get_tile_parameters(path)
+            self.rows = self.mandolin(self.tiles, self.num_cols)
+            self.num_rows = len(self.rows)
         # The dimensions of the mosaic are determined by the
         # tile dimensions minus the offsets between rows and
         # columns. Some general notes:
@@ -180,7 +179,6 @@ class Mosaic(object):
         # (0,0) in the top left corner.
         print 'Stitching mosaic...'
         n_row = 0  # index of row
-        self.rows = self.rows[:2]
         for row in self.rows:
             if self.snake and not (n_row + 1) % 2:
                 row = row[::-1]
@@ -220,11 +218,17 @@ class Mosaic(object):
             draw.text((x, y), text, (0, 0, 0), font=font)
         mosaic.save(self.filename + '.tif', self.extmap[self.ext])
         print 'Stitching complete! (t={})'.format(datetime.now() - start_time)
-        # Clear some folder-specific parameters
-        del self.filename
-        del self.name
-        del self.tiles
-        del self.rows
+        # Clear folder-specific parameters. These will be repopulated
+        # automatically if the same Mosaic object is used for a
+        # different filepath. This isn't crucial--these values should
+        # be overwritten by future uses of the same Mosaic instance.
+        try:
+            del self.filename
+            del self.tiles
+            del self.rows
+            del self.name
+        except AttributeError:
+            pass
         return self
 
 
@@ -321,7 +325,35 @@ class Mosaic(object):
 
     def patch_tiles(self, tiles):
         """Patch tileset with blanks based on mosaic.Selector"""
-        pass
+        """Returns sorted list of tiles including patches"""
+        patches = glob.glob(os.path.join(path, '..', 'output',
+                                         'placeholders', '*' + ext))
+        if len(patches):
+            print 'Patching mosaic with tiles set aside by selector.py...'
+        # Insert patches into sequence
+        sequence = {}
+        for tile in patches:
+            coords = os.path.splitext(tile)[0].split('@')[1].rstrip(']').split(' ')
+            y, x = [int(x) for x in coords]
+            i = x * num_cols + y
+            sequence[i] = tile
+        tiles = glob.glob(os.path.join(path, '*' + ext))
+        tiles.sort(key=lambda fn: sorter(fn))
+        j = 0
+        for tile in tiles:
+            while True:
+                try:
+                    sequence[j]
+                except:
+                    sequence[j] = tile
+                    break
+                else:
+                    j += 1
+        tiles = []
+        for i in sorted(sequence.keys()):
+            tiles.append(sequence[i])
+        #print '\n'.join(tiles)
+        return tiles
 
 
 
