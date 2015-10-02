@@ -6,10 +6,15 @@ import os
 import re
 import shutil
 import sys
+import Tkinter
+import tkFileDialog
+from copy import copy
 from textwrap import fill
 
 import pyglet
 from PIL import Image
+
+from .mosaic import mandolin
 
 
 
@@ -19,17 +24,19 @@ class Selector(object):
 
     def __init__(self, ext='.tif'):
 
+        self.ext = ext
+
         decimal.getcontext().prec = 6
 
         root = Tkinter.Tk()
         root.withdraw()
         title = ("Please select the directory containing your tiles:")
         initial = os.path.expanduser('~')
-        self.path = tkFileDialog.askdirectory(parent=root, title=title,
-                                              initialdir=initial)
-
-        tiles = [fp for fp in glob.glob(os.path.join(path, '*' + ext))]
-        self.source = os.path.join(self.path, tiles)
+        self.source = tkFileDialog.askdirectory(parent=root, title=title,
+                                                initialdir=initial)
+        print 'Source is {}'.format(self.source)
+        tiles = [fp for fp in glob.glob(os.path.join(self.source,
+                                                     '*' + self.ext))]
 
         # Get window dimensions. These will be used to set the size of
         # the pyglet window later.
@@ -46,7 +53,7 @@ class Selector(object):
         it will prompt the user to input that information manually.
         """
         settings = glob.glob(os.path.join(self.source, '*.apf'))
-        if len(settings) == 1:
+        if len(settings):
             print ('Reading job settings'
                    ' from {}...').format(os.path.basename(settings[0]))
             params = {}
@@ -88,76 +95,92 @@ class Selector(object):
 
 
 
-
-
     def select(self, ul, lr, z, mag, mystery_int):
         """ Allow user to select tiles to keep """
         self.ul = ul
         self.lr = lr
 
         # Lighten the input tiles a bit to make the hover effect more clear
-        for fp in glob.iglob(os.path.join(self.source, '*.tif')):
-            im = Image.open(fp)
-            mask = Image.new('L', im.size, 'white')
-            im = Image.blend(im, mask, 0.75)
-            im.mode = 'L'
+        cols = []
+        grid = {}
+        for fp in glob.iglob(os.path.join(self.source, '*' + self.ext)):
+            img = Image.open(fp)
+            mask = Image.new('L', img.size, 'white')
+            img = Image.blend(img, mask, 0.75)
+            img.mode = 'L'
             # Calculate coordinates
-            coords = os.path.splitext(fp)[0].split('@')[1].rstrip(']')
-            coords = ['{0:0>4}'.format(c) for c in coords.split(' ')[::-1]]
-            coords = 'x'.join(coords)
-            im.save(os.path.join(self.working, 'tile_' + coords + '.jpg'),
-                    'JPEG')
+            try:
+                key = os.path.splitext(fp)[0].split('@')[1].rstrip(']')
+            except IndexError:
+                raw_input("Malformatted filename: Check tiles for images"
+                          " that aren't part of the grid")
+                raise
+            x, y = key.split(' ')
+            cols.append(int(x))
+            w, h = img.size
+            grid[key] = copy(img)
 
-        # Get sizes for the tiles and the complete moasic
-        row = glob.glob(os.path.join(self.working, '*_0000x*.jpg'))
-        col = glob.glob(os.path.join(self.working, '*x0000.jpg'))
-        for fp in row:
-            im = Image.open(fp)
-            w, h = im.size
-            break
-        self.tiles_per_row = len(row)
-        self.tiles_per_col = len(col)
+        self.num_cols = max(cols) + 1
+        self.num_rows = len(grid) / self.num_cols
+
+        print self.num_cols, self.num_rows
+
+        for key in grid.keys():
+            x, y = key.split(' ')
+            i = int(x) + self.num_cols * int(y)
+            grid[i] = grid[key]
+            del grid[key]
 
         self.coordinate_width = (abs(self.ul[0] - self.lr[0]) /
-                                 (self.tiles_per_row - 1))
+                                 (self.num_cols - 1))
         self.coordinate_height = (abs(self.ul[1] - self.lr[1])  /
-                                  (self.tiles_per_col - 1))
+                                  (self.num_rows - 1))
 
-        row_w = w * len(row)
-        row_h = h * len(col)
-
+        row_w = w * self.num_cols
+        row_h = h * self.num_rows
         scalar_w = float(self.window_width) / row_w
         scalar_h = float(self.window_height) / row_h
-
         resized_w = int(w * scalar_w)
         resized_h = int(h * scalar_h)
 
-        for fp in glob.iglob(os.path.join(self.working, '*.jpg')):
-            im = Image.open(fp)
-            im = im.resize((resized_w, resized_h))
-            im.save(fp)
+        for key in grid:
+            grid[key] = grid[key].resize((resized_w, resized_h))
+        rows = mandolin([grid[key] for key in sorted(grid.keys())],
+                        self.num_cols)
 
         # Open pyglet window to allow users to select tiles
         window = pyglet.window.Window(self.window_width, self.window_height)
         cursor = window.get_system_mouse_cursor(window.CURSOR_HAND)
         window.set_mouse_cursor(cursor)
 
+        # Create pyglet sprite object
         batch = pyglet.graphics.Batch()
         sprites = []
         tiles = []
-        for fp in glob.iglob(os.path.join(self.working, '*.jpg')):
-            im = pyglet.image.load(fp)
-            y, x = os.path.splitext(fp)[0].rsplit('_', 1)[1].split('x')
-            x = int(x) * im.width
-            y = window.height - (int(y) + 1) * im.height
-            sprites.append(pyglet.sprite.Sprite(im, x=x, y=y, batch=batch))
-            tiles.append(fp)
+        n_row = 0  # index of row
+        for row in rows:
+            n_col = 0  # index of column
+            for img in row:
+                w, h = img.size
+                x = n_col * w
+                y = self.window_height - (n_row + 1) * h
+                #x, y = 0, 0
+                raw = img.convert('RGB').tobytes('raw', 'RGB')
+                img = pyglet.image.ImageData(w, h, 'RGB', raw, -w*3)
+                sprites.append(pyglet.sprite.Sprite(img, x=x, y=y, batch=batch))
+                tiles.append((n_col, n_row))
+                n_col += 1
+            n_row += 1
+
+
 
 
         @window.event
         def on_draw():
             window.clear()
             batch.draw()
+
+
 
 
         @window.event
@@ -187,7 +210,7 @@ class Selector(object):
                     skip.append(tiles[i])
                 i += 1
             # Write everything in keep to points.apf
-            fp = os.path.join(self.path, 'points.apf')
+            fp = os.path.join(self.source, 'points.apf')
             print 'Writing {}...'.format(fp)
             header = [
                     'TYPE:POINT',
@@ -217,18 +240,20 @@ class Selector(object):
                 for point in points:
                     f.write(' '.join(point) + '\r\n')
                 f.write('Sequence Done\r\n')
-            # Copy skipped tiles for later
+            # Log indexes of skipped tiles
+            fp = os.path.join(self.source, 'skipped.txt')
+            print 'Writing {}...'.format(fp)
+            indexes = []
             for tile in skip:
-                coords = os.path.splitext(tile)[0].split('_')[1].split('x')
-                coords = [c.lstrip('0') if bool(c.lstrip('0'))
-                          else '0' for c in coords]
-                fn = '*@' + coords[1] + ' ' + coords[0] + '].tif'
-                src = glob.glob(os.path.join(self.source, fn))[0]
-                dst = os.path.join(self.placeholders, os.path.basename(src))
-                shutil.copy2(src, dst)
+                n_col, n_row = tile
+                i = n_col + self.num_cols * n_row
+                indexes.append(i)
+            with open(fp, 'wb') as f:
+                f.write('\n'.join([str(i) for i in sorted(indexes)]))
+            fp = os.path.join(self.source, 'selected.jpg')
+            pyglet.image.get_buffer_manager().get_color_buffer().save(fp)
             window.close()
             pyglet.app.exit()
-            shutil.rmtree(self.working)
             raw_input('Done! Press any key to exit.')
 
 
@@ -249,87 +274,12 @@ class Selector(object):
 
 
 
-    def get_center(self, tile):
+    def get_center(self, coordinates):
         """Calculates center points for each title based on ul and lr"""
-        y, x = [int(x) for x
-                in os.path.splitext(tile)[0].split('_')[1].split('x')]
+        x, y = coordinates
         center = (self.ul[0] + self.coordinate_width * x,
                   self.ul[1] - self.coordinate_height * y)
         return center
-
-
-
-
-    def get_settings(self):
-        """Get stored user settings
-
-        This function sets the following parameters:
-            path        location of the source files
-            flag
-            keep_rows
-            raise_error
-            add_label
-        """
-        # Read settings from settings.txt
-        global_settings = {}
-        fp = os.path.join('config', 'settings.txt')
-        with open(fp, 'rb') as f:
-            rows = csv.reader(f, delimiter=',', quotechar='"')
-            for row in rows:
-                row = [s.strip() for s in row]
-                if not ''.join(row).startswith('#'):
-                    key, val = row[0].split('=')
-                    global_settings[key] = val
-
-        # Try to read settings from user's custom file
-        user = os.environ.get("USERNAME")
-        try:
-            os.makedirs(os.path.join('config', 'users', user))
-        except:
-            # User directory already exists
-            pass
-        fp = os.path.join('config', 'users', user, 'settings.txt')
-        try:
-            open(fp, 'rb')
-        except:
-            # No user settings file. Create one from global file after
-            # settings have been vetted.
-            pass
-        else:
-            with open(fp, 'rb') as f:
-                rows = csv.reader(f, delimiter=',', quotechar='"')
-                for row in rows:
-                    row = [s.strip() for s in row]
-                    if not ''.join(row).startswith('#'):
-                        key, val = row[0].split('=')
-                        global_settings[key] = val
-
-        # Assign settings to local variables
-        yn = {'yes' : True, 'no' : False}
-        params = {}
-        try:
-            self.path = global_settings['PATH_ROOT']
-            self.flag = global_settings['OUTPUT'].lower()
-            self.keep_rows = yn[global_settings['KEEP_ROWS'].lower()]
-            self.raise_error = yn[global_settings['RAISE_ERROR'].lower()]
-            self.add_label = yn[global_settings['ADD_LABEL'].lower()]
-        except:
-            raw_input('Fatal error: Settings file malformatted')
-            raise
-        else:
-            # Test non-key variables
-            if not os.path.isdir(self.path) \
-               or not self.flag in ['quiet', 'debug all']:
-                raw_input('Fatal error: Settings file malformatted')
-                sys.exit()
-
-        # Copy global settings file to user directory if does not exist
-        try:
-            open(fp, 'rb')
-        except:
-            src = os.path.join('config', 'settings.txt')
-            dst = fp
-            shutil.copy2(src, dst)
 
 
 
@@ -411,9 +361,3 @@ class Selector(object):
                 print '-' * 60 + '\n' + fill(errortext) + '\n' + '-' * 60
         # Return value as unicode
         return result
-
-
-# Handle user input
-selector = Selector()
-params = selector.get_job_settings()
-selector.select(*params)
