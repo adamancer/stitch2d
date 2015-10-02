@@ -24,6 +24,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 import Tkinter
 import tkFileDialog
+from copy import copy
 
 from natsort import natsorted
 
@@ -50,20 +51,46 @@ class Mosaic(object):
 
 
     def __init__(self, path):
-        self.extmap = {
-            '.jpg' : 'JPEG',
-            '.tif' : 'TIFF',
-            '.tiff' : 'TIFF'
-        }
-        self.stitch(path)
-
-
-
-
-    def stitch(self, path):
-        """Calls parameters in proper order"""
-        self.get_tile_parameters(path)
-        self.set_mosaic_parameters()
+        # self.filename (str, specific)
+        # self.name (str, specific)
+        # self.tiles (list, specific)
+        # self.rows (int, specific)
+        # self.basepath (str, carries over)
+        # self.image_types (dict, carries over)
+        # self.extmap (dict, carries over)
+        # self.snake (bool, carries over)
+        # self.ext (str, carries over)
+        # self.w (int, carries over)
+        # self.h (int, carries over)
+        # self.mag (int, carries over)
+        # self.num_rows (int, carries over)
+        # self.num_cols (int, carries over)
+        # self.x_offset_within_row (int, carries over)
+        # self.x_offset_between_rows (int, carries over)
+        # self.y_offset_within_row (int, carries over)
+        # self.y_offset_between_rows (int, carries over)
+        if isinstance(previous_instance, Mosaic):
+            print 'Inheriting parameters from previous instance'
+            self = copy(previous_instance)
+            self.get_tile_parameters(path)
+            self.rows = self.mandolin(self.tiles, self.num_cols)
+            self.num_rows = len(self.rows)
+        else:
+            self.extmap = {
+                '.jpg' : 'JPEG',
+                '.tif' : 'TIFF',
+                '.tiff' : 'TIFF'
+            }
+            self.basepath = os.path.dirname(__file__)
+            self.image_types = {}
+            with open(os.path.join(self.basepath, 'config',
+                                   'image_types.txt')) as f:
+                rows = csv.reader(f, delimiter=',', quotechar='"')
+                self.image_types = dict([(row[0].lower(), row[1])
+                                          for row in rows if bool(row[0])
+                                          and not row[0].startswith('#')])
+            self.get_tile_parameters(path)
+            self.set_mosaic_parameters()
         self.create_mosaic()
 
 
@@ -86,10 +113,18 @@ class Mosaic(object):
                 tiles.append(fp)
         self.ext = [key for key in exts
                     if exts[key] == max(exts.values())][0].lower()
-        self.dim = [key for key in dims
-                    if dims[key] == max(dims.values())][0]
-        self.w, self.h = [int(x) for x in self.dim.split('x')]
-        self.name = os.path.dirname(path)
+        dim = [key for key in dims if dims[key] == max(dims.values())][0]
+        self.w, self.h = [int(x) for x in dim.split('x')]
+        self.filename = os.path.basename(path)
+        try:
+            self.name, image_type = self.filename.rsplit('_', 1)
+            self.name += ' ({})'.format(self.image_types[image_type.lower()])
+        except ValueError:
+            # No suffix found
+            pass
+        except KeyError:
+            # Suffix was not recognized
+            pass
         self.tiles = self.sort_tiles([tile for tile in tiles
                                       if tile.endswith(self.ext)])
         return self
@@ -121,6 +156,7 @@ class Mosaic(object):
 
     def create_mosaic(self, label=True):
         """Create a mosaic from a set a tiles with known, fixed offsets"""
+        start_time = datetime.now()
         # The dimensions of the mosaic are determined by the
         # tile dimensions minus the offsets between rows and
         # columns. Some general notes:
@@ -142,7 +178,9 @@ class Mosaic(object):
         # Now that the canvas has been created, we can paste the
         # individual tiles on top of it. Coordinates increase from
         # (0,0) in the top left corner.
+        print 'Stitching mosaic...'
         n_row = 0  # index of row
+        self.rows = self.rows[:2]
         for row in self.rows:
             if self.snake and not (n_row + 1) % 2:
                 row = row[::-1]
@@ -164,7 +202,11 @@ class Mosaic(object):
             n_row += 1
         # Add label
         if label:
-            text = self.name[0].upper() + self.name[1:]
+            try:
+                text = self.name
+            except:
+                text = self.filename
+            text = text[0].upper() + text[1:]
             draw = ImageDraw.Draw(mosaic)
             # Resize text to a reasonable size based on the
             # dimensions of the mosaic
@@ -176,7 +218,14 @@ class Mosaic(object):
             x = int(0.02 * mosaic_width)
             y = mosaic_height - int(label_height)
             draw.text((x, y), text, (0, 0, 0), font=font)
-        mosaic.save(self.name + '.tif', self.extmap[self.ext])
+        mosaic.save(self.filename + '.tif', self.extmap[self.ext])
+        print 'Stitching complete! (t={})'.format(datetime.now() - start_time)
+        # Clear some folder-specific parameters
+        del self.filename
+        del self.name
+        del self.tiles
+        del self.rows
+        return self
 
 
 
@@ -217,12 +266,12 @@ class Mosaic(object):
         cols = []
         for tile in tiles:
             key = tile.replace(starts, '', 1).replace(ends, '', 1)
-            if ' ' in key:
+            try:
                 x, y = key.split(' ')
                 i = int(y) * self.num_cols + int(x)
                 cols.append(y)
-            else:
-                i = int(key)
+            except ValueError:
+                i = key
             temp[i] = tile
         # Bonus: Determine the number of columns if the tiles are
         # provided with SEM-style grid notation. This is kind of an
