@@ -1,6 +1,6 @@
 ################################################################################
-# 
-################################################################################ 
+# Special mosaic types
+################################################################################
 "unspecified","unspecified image type"
 "ref","petrographic microscope, reflected light"
 "trans","petrographic microscope, transmitted light"
