@@ -5,10 +5,83 @@ import os
 import pyglet
 import random
 import subprocess
-from pyglet.window import key
-from pyglet.window import mouse
+from random import randint
+
+import pyglet.window
+from pyglet.window import key, mouse
 from pyglet.gl import *
 
+from PIL import Image
+
+# 1. Get screen dimensions
+# 2. Select tiles from near center of mosaic
+# 3. Crop tiles to dimensions of window n(w=50%, h=100%)
+# 4.
+
+class Offset(object):
+
+    def __init__(self, rows):
+        """
+        @param list  tiles must be ordered and patched!
+        """
+
+        self.rows = rows
+        self.num_cols = len(rows[0])
+        self.num_rows = len(rows)
+        # Get window dimensions. These will be used to set the size of
+        # the pyglet window later.
+        platform = pyglet.window.get_platform()
+        display = platform.get_default_display()
+        screen = display.get_default_screen()
+        self.window_width = screen.width - 200
+        self.window_height = screen.height - 200
+
+        while True:
+            self.get_neighbors(False)
+
+
+
+
+    def get_neighbors(self, from_middle=False, from_row=True):
+        if from_middle:
+            n_col = self.num_cols / 2
+            n_row = self.num_rows / 2
+        else:
+            n_col = randint(0, self.num_cols - 1)
+            n_row = randint(0, self.num_rows - 1)
+        print n_col, n_row
+        if from_row and not self.num_cols == 1:
+            row = self.rows[n_row]
+            try:
+                tiles = row[n_col], row[n_col+1]
+            except IndexError:
+                tiles = row[n_col-1], row[n_col]
+        left, right = [Image.open(tile) for tile in tiles]
+        w, h = left.size
+        crop_w = self.window_width / 2
+        if crop_w > w:
+            crop_w = w
+        crop_h = self.window_height
+        if crop_h > h:
+            crop_h = h
+        box = (w - crop_w, 0, w, crop_h)
+        left = left.crop(box)
+        box = (0, 0, w - crop_w, crop_h)
+        right = right.crop((0, 0, crop_w, crop_h))
+        img = Image.new('RGB', (self.window_width+1, self.window_height+1))
+        img.paste(left, (0,0))
+        img.paste(right, (crop_w + 1, 0))
+        img.show()
+        raw_input()
+
+
+
+
+
+
+
+
+'''
 #define functions
 def enq(s):
     #adds quotes to string
@@ -140,7 +213,7 @@ def get_image(path, rows, dim, ext,
         subprocess.call(' '.join(cmd),
                         #startupinfo=startupinfo,
                         shell=True)
-    
+
 
 def get_offset(path, rows, dim, ext, same_row):
     #set function variables to dict
@@ -325,7 +398,7 @@ def get_offset(path, rows, dim, ext, same_row):
                               bold = True, color = (0,255,255,255),
                               x = 2, y = 2,
                               anchor_x = 'left', anchor_y = 'bottom')
-    
+
 
     #draw screen
     @window.event
@@ -341,9 +414,10 @@ def get_offset(path, rows, dim, ext, same_row):
         top_r.draw()
         bot_r.draw()
         bot_l.draw()
-        
+
     #run the application
     pyglet.app.run()
 
     #return accepted value on window close
     return fx['offset']
+'''
