@@ -7,6 +7,7 @@ import random
 import subprocess
 from random import randint
 
+import pyglet.text
 import pyglet.window
 from pyglet.window import key, mouse
 from pyglet.gl import *
@@ -24,10 +25,24 @@ class Offset(object):
         """
         @param list  tiles must be ordered and patched!
         """
-
+        # Tileset parameters
         self.rows = rows
         self.num_cols = len(rows[0])
         self.num_rows = len(rows)
+        # Coordinates increase from 0,0 in the upper left. Offsets
+        # are defined as follows:
+        #  Within row: y is positive if the top edge of the right
+        #   tile is HIGHER than that of the left (stair step up).
+        #   Because tiles must be shifted left to overlap, x
+        #   is always negative.
+        #  Between rows: x is positive if the left edge of the lower
+        #   tile is to the RIGHT of the left edge of the upper tile.
+        #   Because tiles must be shifted up to overlap, y is
+        #   always negative.
+        self.x_offset_within_row = 0  # final value should be <= 0
+        self.x_offset_between_rows = 0
+        self.y_offset_within_row = 0
+        self.y_offset_between_rows = 0  # final value should be <= 0
         # Get window dimensions. These will be used to set the size of
         # the pyglet window later.
         platform = pyglet.window.get_platform()
@@ -37,26 +52,34 @@ class Offset(object):
         self.window_height = screen.height - 200
 
         while True:
-            self.get_neighbors(False)
+            self.get_tiles()
+            raw_input()
 
 
 
 
-    def get_neighbors(self, from_middle=False, from_row=True):
+    def get_tiles(self, from_middle=False, from_row=True):
+        """Returns two adjacent tiles"""
         if from_middle:
             n_col = self.num_cols / 2
             n_row = self.num_rows / 2
         else:
             n_col = randint(0, self.num_cols - 1)
             n_row = randint(0, self.num_rows - 1)
-        print n_col, n_row
         if from_row and not self.num_cols == 1:
             row = self.rows[n_row]
             try:
                 tiles = row[n_col], row[n_col+1]
             except IndexError:
                 tiles = row[n_col-1], row[n_col]
-        left, right = [Image.open(tile) for tile in tiles]
+        elif not from_row and not self.num_rows == 1:
+            row = self.rows[n_row]
+        self.composite(tiles, from_row)
+
+
+
+    def composite(self, tiles, from_row=True):
+        left, right = [Image.open(tile).convert('RGBA') for tile in tiles]
         w, h = left.size
         crop_w = self.window_width / 2
         if crop_w > w:
@@ -64,15 +87,51 @@ class Offset(object):
         crop_h = self.window_height
         if crop_h > h:
             crop_h = h
-        box = (w - crop_w, 0, w, crop_h)
-        left = left.crop(box)
-        box = (0, 0, w - crop_w, crop_h)
+        left = left.crop((w - crop_w, 0, w, crop_h))
         right = right.crop((0, 0, crop_w, crop_h))
-        img = Image.new('RGB', (self.window_width+1, self.window_height+1))
-        img.paste(left, (0,0))
-        img.paste(right, (crop_w + 1, 0))
-        img.show()
-        raw_input()
+        mask = Image.new('RGBA', (crop_w, crop_h), (255,255,255, 128))
+        right = Image.alpha_composite(right, mask)
+        #img = Image.new('RGB', (self.window_width, self.window_height))
+        #img.paste(left, (0,0))
+        #img.paste(right, (crop_w + self.x_offset_within_row, 0))
+
+        # Open pyglet window to allow users to select tiles
+        window = pyglet.window.Window(self.window_width, self.window_height)
+        cursor = window.get_system_mouse_cursor(window.CURSOR_HAND)
+        window.set_mouse_cursor(cursor)
+        window.set_caption('Set offset between tiles in the same row')
+
+        batch = pyglet.graphics.Batch()
+        sprites = []
+        img = self.pil_to_pyglet(left, 'RGBA')
+        sprites.append(pyglet.sprite.Sprite(img, x=0, y=0, batch=batch))
+        img = self.pil_to_pyglet(right, 'RGBA')
+        x = crop_w + self.x_offset_within_row
+        sprites.append(pyglet.sprite.Sprite(img, x=x, y=0, batch=batch))
+
+
+        @window.event
+        def on_draw():
+            window.clear()
+            batch.draw()
+
+
+        @window.event
+        def on_mouse_press(x, y, button, modifiers):
+            window.clear()
+            batch.draw()
+
+        pyglet.app.run()
+
+
+
+
+    def pil_to_pyglet(self, img, mode):
+        """Convert PIL Image to pyglet image"""
+        w, h = img.size
+        raw = img.convert(mode).tobytes('raw', mode)
+        return pyglet.image.ImageData(w, h, mode, raw, -w*len(mode))
+
 
 
 
