@@ -98,6 +98,8 @@ class Selector(object):
         z = decimal.Decimal(params['z'])
         mag = params['mag']
         mystery_int = params['mystery_int']
+        self.ul = ul
+        self.lr = lr
         return (ul, lr, z, mag, mystery_int)
 
 
@@ -105,8 +107,7 @@ class Selector(object):
 
     def select(self, ul, lr, z, mag, mystery_int):
         """ Allow user to select tiles to keep """
-        self.ul = ul
-        self.lr = lr
+        print 'Preparing selection grid...'
 
         # Lighten the input tiles a bit to make the hover effect more clear
         cols = []
@@ -163,6 +164,7 @@ class Selector(object):
         window = pyglet.window.Window(self.window_width, self.window_height)
         cursor = window.get_system_mouse_cursor(window.CURSOR_HAND)
         window.set_mouse_cursor(cursor)
+        window.set_caption('Select tiles to ignore')
 
         # Create pyglet sprite object
         batch = pyglet.graphics.Batch()
@@ -175,23 +177,17 @@ class Selector(object):
                 w, h = img.size
                 x = n_col * (w + 1)
                 y = self.window_height - (n_row + 1) * (h + 1)
-                #x, y = 0, 0
-                raw = img.convert('RGB').tobytes('raw', 'RGB')
-                img = pyglet.image.ImageData(w, h, 'RGB', raw, -w*3)
+                img = self.pil_to_pyglet(img, 'RGB')
                 sprites.append(pyglet.sprite.Sprite(img, x=x, y=y, batch=batch))
                 tiles.append((n_col, n_row))
                 n_col += 1
             n_row += 1
 
 
-
-
         @window.event
         def on_draw():
             window.clear()
             batch.draw()
-
-
 
 
         @window.event
@@ -277,8 +273,6 @@ class Selector(object):
             raw_input('Done! Press any key to exit.')
 
 
-
-
         @window.event
         def on_mouse_motion(x, y, dx, dy):
             for sprite in sprites:
@@ -286,8 +280,9 @@ class Selector(object):
                 if (sprite_x < x < sprite_x + sprite.width
                     and sprite_y < y < sprite_y + sprite.height):
                     sprite.color = (255, 0, 0)
-                else:
-                    sprite.color = (255, 255, 255)
+                    break
+            else:
+                sprite.color = (255, 255, 255)
 
         pyglet.app.run()
 
@@ -300,3 +295,12 @@ class Selector(object):
         center = (self.ul[0] + self.coordinate_width * x,
                   self.ul[1] - self.coordinate_height * y)
         return center
+
+
+
+
+    def pil_to_pyglet(self, img, mode):
+        """Convert PIL Image to pyglet image"""
+        w, h = img.size
+        raw = img.convert(mode).tobytes('raw', mode)
+        return pyglet.image.ImageData(w, h, mode, raw, -w*len(mode))
