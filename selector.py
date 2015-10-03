@@ -12,6 +12,7 @@ from copy import copy
 from textwrap import fill
 
 import pyglet
+import pyglet.window
 from PIL import Image
 
 from .mosaic import mandolin
@@ -23,26 +24,32 @@ from ..helpers import prompt
 class Selector(object):
 
 
-    def __init__(self, ext='.tif'):
+    def __init__(self, path=None, ext='.tif'):
 
         self.ext = ext
 
         decimal.getcontext().prec = 6
 
-        root = Tkinter.Tk()
-        root.withdraw()
-        title = ("Please select the directory containing your tiles:")
-        initial = os.path.expanduser('~')
-        self.source = tkFileDialog.askdirectory(parent=root, title=title,
-                                                initialdir=initial)
+        if not path:
+            root = Tkinter.Tk()
+            root.withdraw()
+            title = ("Please select the directory containing your tiles:")
+            initial = os.path.expanduser('~')
+            self.source = tkFileDialog.askdirectory(parent=root, title=title,
+                                                    initialdir=initial)
+        else:
+            self.source = path
         print 'Source is {}'.format(self.source)
         tiles = [fp for fp in glob.glob(os.path.join(self.source,
                                                      '*' + self.ext))]
 
         # Get window dimensions. These will be used to set the size of
         # the pyglet window later.
-        self.window_width = ctypes.windll.user32.GetSystemMetrics(0) - 200
-        self.window_height = ctypes.windll.user32.GetSystemMetrics(1) - 200
+        platform = pyglet.window.get_platform()
+        display = platform.get_default_display()
+        screen = display.get_default_screen()
+        self.window_width = screen.width - 200
+        self.window_height = screen.height - 200
 
 
 
@@ -144,6 +151,9 @@ class Selector(object):
         resized_w = int(w * scalar_w)
         resized_h = int(h * scalar_h)
 
+        row_w += self.num_cols
+        row_h += self.num_rows
+
         for key in grid:
             grid[key] = grid[key].resize((resized_w, resized_h))
         rows = mandolin([grid[key] for key in sorted(grid.keys())],
@@ -163,8 +173,8 @@ class Selector(object):
             n_col = 0  # index of column
             for img in row:
                 w, h = img.size
-                x = n_col * w
-                y = self.window_height - (n_row + 1) * h
+                x = n_col * (w + 1)
+                y = self.window_height - (n_row + 1) * (h + 1)
                 #x, y = 0, 0
                 raw = img.convert('RGB').tobytes('raw', 'RGB')
                 img = pyglet.image.ImageData(w, h, 'RGB', raw, -w*3)
