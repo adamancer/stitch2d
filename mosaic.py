@@ -1,10 +1,3 @@
-#Mosaic 0.92
-#Updated 21 Jul 2014
-#Stitches mosaics from tiles collected using SEM or Prior stage. Processes all
-#images found in subfolders in PATH_ROOT in config file. Each tileset should
-#be in its own folder named as follows: [prefix][number]_[suffix][type].
-#Types should EXACTLY MATCH keys from the scope_type dictionary.
-
 import csv
 import glob
 import os
@@ -13,16 +6,14 @@ import sys
 import time
 import Tkinter
 import tkFileDialog
+from copy import copy
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 
 from ..helpers import prompt
-from .offset2 import OffsetEngine
+from .offset import OffsetEngine
 
 
-#-------------------------------------------------------------------------------
-#-FUNCTION DEFINITIONS----------------------------------------------------------
-#-------------------------------------------------------------------------------
 
 
 class Counter(dict):
@@ -39,8 +30,8 @@ class Counter(dict):
 class Mosaic(object):
 
 
-    def __init__(self, path):
-        # A quick list of properties of the Mosaic object:
+    def __init__(self, path, jpeg=False):
+        # Properties of the Mosaic object:
         #  self.filename (str, specific)
         #  self.name (str, specific)
         #  self.tiles (list, specific)
@@ -59,6 +50,7 @@ class Mosaic(object):
         #  self.x_offset_between_rows (int, carries over)
         #  self.y_offset_within_row (int, carries over)
         #  self.y_offset_between_rows (int, carries over)
+        self.jpeg = jpeg
         self.extmap = {
             '.jpg' : 'JPEG',
             '.tif' : 'TIFF',
@@ -117,13 +109,13 @@ class Mosaic(object):
     def set_mosaic_parameters(self):
         """Prompt user for job parameters"""
         yes_no = {'y' : True, 'n' : False}
-        print '-' * 80 + '\nSet mosaic parameters:'
+        print 'Set mosaic parameters:'
         try:
             self.num_cols
         except:
-            self.num_cols = int(prompt('Number of columns:', '\d+'))
+            self.num_cols = int(prompt(' Number of columns:', '\d+'))
         else:
-            print ('Number of columns: {} (determined from'
+            print (' Number of columns: {} (determined from'
                    ' filenames)').format(self.num_cols)
         #self.mag = int(prompt('Magnification:', '\d+'))
         #self.snake = prompt('Snake pattern?', yes_no)
@@ -131,21 +123,23 @@ class Mosaic(object):
         self.snake = False
         self.rows = mandolin(self.tiles, self.num_cols)
         self.num_rows = len(self.rows)
-        print 'Determining offset...'
+        print 'Setting offset...'
         engine = OffsetEngine(self.rows, True)
-        offset = engine.determine()
+        offset = engine.set_offset()
         engine = OffsetEngine(self.rows, False, offset)
-        offset = engine.determine()
+        offset = engine.set_offset()
         self.x_offset_within_row = offset[0]
         self.y_offset_within_row = offset[1]
         self.x_offset_between_rows = offset[2]
         self.y_offset_between_rows = offset[3]
         # Review parameters
-        print '-' * 80
-        print 'Dimensions:', '{}x{}'.format(self.num_cols, self.num_rows)
-        print 'Magnification:', self.mag
-        print 'Snake:', self.snake
-        if prompt('Are these parameters okay?', yes_no):
+        print 'Review parameters for your mosaic:'
+        print ' Dimensions:   ', '{}x{}'.format(self.num_cols, self.num_rows)
+        print ' Magnification:', self.mag
+        print ' Offset:       ', offset
+        print ' Snake:        ', self.snake
+        print ' Create JPEG:  ', self.jpeg
+        if prompt('Do these parameters look good?', yes_no):
             return self
         else:
             self.set_mosaic_parameters()
@@ -224,9 +218,15 @@ class Mosaic(object):
             x = int(0.02 * mosaic_width)
             y = mosaic_height - int(label_height)
             draw.text((x, y), text, (0, 0, 0), font=font)
+        print 'Saving as {}...'.format(self.extmap[self.ext])
         fp = os.path.join(self.path, os.pardir, self.filename + '.tif')
         mosaic.save(fp, self.extmap[self.ext])
-        print 'Stitching complete! (t={})'.format(datetime.now() - start_time)
+        if self.jpeg and self.extmap[self.ext] != 'JPEG':
+            print 'Saving as JPEG...'
+            jpeg = mosaic.resize((mosaic_width / 2, mosaic_height / 2))
+            fp = os.path.splitext(fp)[0] + '.jpg'
+            jpeg.save(fp, 'JPEG')
+        print 'Mosaic complete! (t={})'.format(datetime.now() - start_time)
         # Clear folder-specific parameters. These will be repopulated
         # automatically if the same Mosaic object is used for a
         # different filepath. This isn't crucial--these values should
@@ -319,19 +319,6 @@ class Mosaic(object):
 
 
 
-
-    def determine_offset(self, same_row=True):
-        """Use pyglet to allow users to set offset between tiles"""
-
-        self.x_offset_within_row = -190  # must <= 0
-        self.x_offset_between_rows = -6
-        self.y_offset_within_row = -4
-        self.y_offset_between_rows = -56  # must <= 0
-        return self
-
-
-
-
     def patch_tiles(self, tiles):
         """Returns sorted list of tiles including patches"""
         try:
@@ -361,23 +348,28 @@ class Mosaic(object):
 
 
 
-def mosey(path=None):
+def mosey(path=None, jpeg=False):
     """Helper function for stitching a set of directories all at once"""
     if not path:
         root = Tkinter.Tk()
         root.withdraw()
-        title = "Please select the directory containing your tile sets:"
+        title = 'Please select the directory containing your tile sets:'
         initial = os.path.expanduser('~')
         path = tkFileDialog.askdirectory(parent=root, title=title,
                                          initialdir=initial)
-    print path
-    for path in ([os.path.join(path, dn) for dn in os.listdir(path)
-                  if os.path.isdir(os.path.join(path, dn))]):
+    tilesets = [os.path.join(path, dn) for dn in os.listdir(path)
+                if os.path.isdir(os.path.join(path, dn))]
+    # Element maps can be hit or miss for setting offsets, so we shift
+    # backscatter images to top of the list if they're available.
+    for path in copy(tilesets):
+        if 'bsed' in path:
+            tilesets.insert(0, tilesets.pop(tilesets.index(path)))
+    for path in tilesets:
         print 'New tileset: {}'.format(os.path.basename(path))
         try:
             mosaic.create_mosaic(path)
         except NameError:
-            mosaic = Mosaic(path).create_mosaic()
+            mosaic = Mosaic(path, jpeg).create_mosaic()
 
 
 
