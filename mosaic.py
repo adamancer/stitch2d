@@ -117,10 +117,8 @@ class Mosaic(object):
         else:
             print (' Number of columns: {} (determined from'
                    ' filenames)').format(self.num_cols)
-        #self.mag = int(prompt('Magnification:', '\d+'))
-        #self.snake = prompt('Snake pattern?', yes_no)
-        self.mag = 200
-        self.snake = False
+        self.mag = int(prompt('Magnification:', '\d+'))
+        self.snake = prompt('Snake pattern?', yes_no)
         self.rows = mandolin(self.tiles, self.num_cols)
         self.num_rows = len(self.rows)
         print 'Setting offset...'
@@ -365,6 +363,7 @@ def mosey(path=None, jpeg=False):
         if 'bsed' in path:
             tilesets.insert(0, tilesets.pop(tilesets.index(path)))
     for path in tilesets:
+        print '-' * 80
         print 'New tileset: {}'.format(os.path.basename(path))
         try:
             mosaic.create_mosaic(path)

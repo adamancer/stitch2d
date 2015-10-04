@@ -42,16 +42,16 @@ class Selector(object):
         # Reintegrate previously skipped files if they exist
         try:
             os.remove(os.path.join(self.source, 'skipped.txt'))
-        except IOError:
+        except OSError:
             pass
         try:
             os.remove(os.path.join(self.source, 'screenshot.jpg'))
-        except IOError:
+        except OSError:
             pass
         try:
-            path = os.path.join(self.source, 'skipped', '*' + self.ext))
+            path = os.path.join(self.source, 'skipped', '*' + self.ext)
             skipped = [fp for fp in glob.glob(path)]
-        except IOError:
+        except OSError:
             pass
         else:
             for src in skipped:
@@ -66,8 +66,8 @@ class Selector(object):
         platform = pyglet.window.get_platform()
         display = platform.get_default_display()
         screen = display.get_default_screen()
-        self.window_width = screen.width - 200
-        self.window_height = screen.height - 200
+        self.window_width = screen.width - 150
+        self.window_height = screen.height - 150
 
 
 
@@ -167,11 +167,14 @@ class Selector(object):
         row_h = h * self.num_rows
         scalar_w = float(self.window_width) / row_w
         scalar_h = float(self.window_height) / row_h
-        resized_w = int(w * scalar_w)
-        resized_h = int(h * scalar_h)
+        ratio = min(scalar_w, scalar_h)
+        resized_w = int(w * ratio)
+        resized_h = int(h * ratio)
 
-        row_w += self.num_cols
-        row_h += self.num_rows
+        adjusted_width = (resized_w + 1) * self.num_cols
+        adjusted_height = (resized_h + 1) * self.num_rows
+        x = (self.window_width - adjusted_width) / 2 + 75
+        y = (self.window_height - adjusted_height) / 2 + 75
 
         for key in grid:
             grid[key] = grid[key].resize((resized_w, resized_h))
@@ -179,10 +182,12 @@ class Selector(object):
                         self.num_cols)
 
         # Open pyglet window to allow users to select tiles
-        window = pyglet.window.Window(self.window_width, self.window_height)
+        window = pyglet.window.Window(adjusted_width, adjusted_height)
+        window.set_location(x, y)
+        window.set_caption("Select tiles to ignore. Close the window"
+                           " when you're done.")
         cursor = window.get_system_mouse_cursor(window.CURSOR_HAND)
         window.set_mouse_cursor(cursor)
-        window.set_caption('Select tiles to ignore')
 
         # Create pyglet sprite object
         batch = pyglet.graphics.Batch()
@@ -194,7 +199,7 @@ class Selector(object):
             for img in row:
                 w, h = img.size
                 x = n_col * (w + 1)
-                y = self.window_height - (n_row + 1) * (h + 1)
+                y = adjusted_height - (n_row + 1) * (h + 1)
                 img = self.pil_to_pyglet(img, 'RGB')
                 sprites.append(pyglet.sprite.Sprite(img, x=x, y=y, batch=batch))
                 tiles.append((n_col, n_row))
@@ -236,7 +241,7 @@ class Selector(object):
                 i += 1
             # Write everything in keep to points.apf
             fp = os.path.join(self.source, 'points.apf')
-            print 'Writing {}...'.format(fp)
+            print 'Writing points to {}...'.format(fp)
             header = [
                     'TYPE:POINT',
                     'NUM_SEQUENCES: 1',
@@ -267,7 +272,7 @@ class Selector(object):
                 f.write('Sequence Done\r\n')
             # Log indexes of skipped tiles
             fp = os.path.join(self.source, 'skipped.txt')
-            print 'Writing {}...'.format(fp)
+            print 'Writing skipped tile list to {}...'.format(fp)
             indexes = []
             for tile in skip:
                 n_col, n_row = tile
@@ -288,7 +293,6 @@ class Selector(object):
             pyglet.image.get_buffer_manager().get_color_buffer().save(fp)
             window.close()
             pyglet.app.exit()
-            raw_input('Done! Press any key to exit.')
 
 
         @window.event
@@ -300,7 +304,7 @@ class Selector(object):
                     sprite.color = (255, 0, 0)
                 else:
                     sprite.color = (255, 255, 255)
-            time.sleep(0.1)
+            #time.sleep(0.1)
 
         pyglet.app.run()
 
