@@ -25,7 +25,6 @@ class OffsetEngine(pyglet.window.Window):
 
     def __init__(self, rows, same_row=True, offsets=None, *args, **kwargs):
         super(OffsetEngine, self).__init__(*args, visible=False, **kwargs)
-        self.set_location(100,100)
 
         self.rows = rows
         self.num_cols = len(rows[0])
@@ -58,8 +57,10 @@ class OffsetEngine(pyglet.window.Window):
         platform = pyglet.window.get_platform()
         display = platform.get_default_display()
         screen = display.get_default_screen()
-        self.width = screen.width - 200
-        self.height = screen.height - 200
+        margin = 75
+        self.width = screen.width - margin * 2
+        self.height = screen.height - margin * 2
+        self.set_location(margin, margin)
 
         self.hand = self.get_system_mouse_cursor(self.CURSOR_HAND)
         self.crosshair = self.get_system_mouse_cursor(self.CURSOR_CROSSHAIR)
@@ -133,7 +134,7 @@ class OffsetEngine(pyglet.window.Window):
 
 
 
-    def determine(self):
+    def set_offset(self):
         pyglet.app.run()
         return (self.x_offset_within_row, self.y_offset_within_row,
                 self.x_offset_between_rows, self.y_offset_between_rows)
@@ -256,7 +257,6 @@ class OffsetEngine(pyglet.window.Window):
                 tiles = row[n_col], row[n_col+1]
             except IndexError:
                 tiles = row[n_col-1], row[n_col]
-            return self.composite(tiles)
         elif not self.same_row and self.num_rows > 1:
             try:
                 self.rows[n_row+1]
@@ -266,13 +266,22 @@ class OffsetEngine(pyglet.window.Window):
                 tiles = [self.rows[n_row][n_col], self.rows[n_row+1][n_col]]
             except:
                 tiles = [self.rows[n_row][n_col-1], self.rows[n_row+1][n_col]]
+        # If selector has been run on the tileset, there will be
+        # gaps represented by empty strings. From a content
+        # standpoint, we don't care about these, but we need to
+        # check for them because PIL doesn't care for them.
+        try:
+            tiles = [Image.open(tile).convert('RGBA') for tile in tiles]
+        except:
+            self.get_tiles()
+        else:
             return self.composite(tiles)
 
 
 
 
     def composite(self, tiles):
-        t1, t2 = [Image.open(tile).convert('RGBA') for tile in tiles]
+        t1, t2 = tiles
         w, h = t1.size
         if self.same_row:
             crop_w = self.width / 2
