@@ -8,27 +8,16 @@
 import csv
 import glob
 import os
-#import psutil
-import re
-import subprocess
-import shlex
 import shutil
 import sys
-import tempfile
 import time
-import urllib
-from datetime import datetime
-from math import floor, sqrt
-import offset
-from PIL import Image, ImageDraw, ImageFont
-
 import Tkinter
 import tkFileDialog
-from copy import copy
-
-from natsort import natsorted
+from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont
 
 from ..helpers import prompt
+from .offset2 import OffsetEngine
 
 
 #-------------------------------------------------------------------------------
@@ -128,22 +117,37 @@ class Mosaic(object):
     def set_mosaic_parameters(self):
         """Prompt user for job parameters"""
         yes_no = {'y' : True, 'n' : False}
+        print '-' * 80 + '\nSet mosaic parameters:'
         try:
             self.num_cols
         except:
             self.num_cols = int(prompt('Number of columns:', '\d+'))
         else:
-            print ('Columns determined from'
-                   ' filenames (n={})').format(self.num_cols)
-        self.mag = int(prompt('Magnification:', '\d+'))
-        self.snake = prompt('Snake pattern?', yes_no)
+            print ('Number of columns: {} (determined from'
+                   ' filenames)').format(self.num_cols)
+        #self.mag = int(prompt('Magnification:', '\d+'))
+        #self.snake = prompt('Snake pattern?', yes_no)
+        self.mag = 200
+        self.snake = False
         self.rows = mandolin(self.tiles, self.num_cols)
         self.num_rows = len(self.rows)
-        self.determine_offset()
+        print 'Determining offset...'
+        engine = OffsetEngine(self.rows, True)
+        offset = engine.determine()
+        engine = OffsetEngine(self.rows, False, offset)
+        offset = engine.determine()
+        self.x_offset_within_row = offset[0]
+        self.y_offset_within_row = offset[1]
+        self.x_offset_between_rows = offset[2]
+        self.y_offset_between_rows = offset[3]
+        # Review parameters
+        print '-' * 80
+        print 'Dimensions:', '{}x{}'.format(self.num_cols, self.num_rows)
+        print 'Magnification:', self.mag
+        print 'Snake:', self.snake
         if prompt('Are these parameters okay?', yes_no):
             return self
         else:
-            del self.num_cols
             self.set_mosaic_parameters()
 
 
@@ -213,10 +217,10 @@ class Mosaic(object):
             # Resize text to a reasonable size based on the
             # dimensions of the mosaic
             size = 100
-            font = ImageFont.truetype('arial.ttf', size)
+            font = ImageFont.truetype('Arial.ttf', size)
             w, h = font.getsize(text)
             size = int(0.8 * size * label_height / float(h))
-            font = ImageFont.truetype('arial.ttf', size)
+            font = ImageFont.truetype('Arial.ttf', size)
             x = int(0.02 * mosaic_width)
             y = mosaic_height - int(label_height)
             draw.text((x, y), text, (0, 0, 0), font=font)
@@ -318,16 +322,7 @@ class Mosaic(object):
 
     def determine_offset(self, same_row=True):
         """Use pyglet to allow users to set offset between tiles"""
-        # Coordinates increase from 0,0 in the upper left. Offsets
-        # are defined as follows:
-        #  Within row: y is positive if the top edge of the right
-        #   tile is HIGHER than that of the left (stair step up).
-        #   Because tiles must be shifted left to overlap, x
-        #   is always negative.
-        #  Between rows: x is positive if the left edge of the lower
-        #   tile is to the RIGHT of the left edge of the upper tile.
-        #   Because tiles must be shifted up to overlap, y is
-        #   always negative.
+
         self.x_offset_within_row = -190  # must <= 0
         self.x_offset_between_rows = -6
         self.y_offset_within_row = -4
