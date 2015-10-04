@@ -29,20 +29,23 @@ def get_name(fn):
 
 
 
-def organizer():
+def organizer(src_dir=None, dst_dir=None):
     """Organizes maps created by NSS by element"""
     root = Tkinter.Tk()
     root.withdraw()
 
     # Prompt user to select source and destination directories
     initial = os.path.expanduser('~')
-    title = ("Please select the directory containing the element maps:")
-    src_dir = tkFileDialog.askdirectory(parent=root, title=title,
-                                        initialdir=initial)
+    if not src_dir:
+        title = ('Please select the directory containing the element maps:')
+        src_dir = tkFileDialog.askdirectory(parent=root, title=title,
+                                            initialdir=initial)
     print 'Source directory is {}'.format(src_dir)
-    title = ("Please select the destination for the organized element maps:")
-    dst_dir = tkFileDialog.askdirectory(parent=root, title=title,
-                                        initialdir=initial)
+    if not dst_dir:
+        title = ('Please select the destination'
+                 ' for the organized element maps:')
+        dst_dir = tkFileDialog.askdirectory(parent=root, title=title,
+                                            initialdir=initial)
     print 'Destination directory is {}'.format(dst_dir)
     for fp in glob.iglob(os.path.join(src_dir, '*.tif')):
         # Set directory name
