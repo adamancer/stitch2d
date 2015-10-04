@@ -114,11 +114,13 @@ class Mosaic(object):
             self.num_cols
         except:
             self.num_cols = int(prompt(' Number of columns:', '\d+'))
+            self.num_cols = int(self.num_cols)
         else:
             print (' Number of columns: {} (determined from'
                    ' filenames)').format(self.num_cols)
-        self.mag = int(prompt('Magnification:', '\d+'))
-        self.snake = prompt('Snake pattern?', yes_no)
+        self.mag = prompt(' Magnification:', '\d+')
+        self.mag = int(self.mag)
+        self.snake = prompt(' Snake pattern?', yes_no)
         self.rows = mandolin(self.tiles, self.num_cols)
         self.num_rows = len(self.rows)
         print 'Setting offset...'
@@ -200,6 +202,7 @@ class Mosaic(object):
             n_row += 1
         # Add label
         if label:
+            ttf = os.path.join(self.basepath, 'files', 'OpenSans-Regular.ttf')
             try:
                 text = self.name
             except:
@@ -209,10 +212,10 @@ class Mosaic(object):
             # Resize text to a reasonable size based on the
             # dimensions of the mosaic
             size = 100
-            font = ImageFont.truetype('Arial.ttf', size)
+            font = ImageFont.truetype(ttf, size)
             w, h = font.getsize(text)
             size = int(0.8 * size * label_height / float(h))
-            font = ImageFont.truetype('Arial.ttf', size)
+            font = ImageFont.truetype(ttf, size)
             x = int(0.02 * mosaic_width)
             y = mosaic_height - int(label_height)
             draw.text((x, y), text, (0, 0, 0), font=font)
