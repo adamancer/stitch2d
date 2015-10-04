@@ -126,14 +126,13 @@ class Selector(object):
     def select(self, ul, lr, z, mag, mystery_int):
         """ Allow user to select tiles to keep """
         print 'Preparing selection grid...'
-
         # Lighten the input tiles a bit to make the hover effect more clear
         cols = []
         grid = {}
         for fp in glob.iglob(os.path.join(self.source, '*' + self.ext)):
             img = Image.open(fp)
             mask = Image.new('L', img.size, 'white')
-            img = Image.blend(img, mask, 0.75)
+            img = Image.blend(img, mask, 0.35)
             img.mode = 'L'
             # Calculate coordinates
             try:
