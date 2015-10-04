@@ -1,11 +1,9 @@
-import csv
-import ctypes
 import decimal
 import glob
 import os
-import re
 import shutil
 import sys
+import time
 import Tkinter
 import tkFileDialog
 from copy import copy
@@ -40,6 +38,26 @@ class Selector(object):
         else:
             self.source = path
         print 'Source is {}'.format(self.source)
+
+        # Reintegrate previously skipped files if they exist
+        try:
+            os.remove(os.path.join(self.source, 'skipped.txt'))
+        except IOError:
+            pass
+        try:
+            os.remove(os.path.join(self.source, 'screenshot.jpg'))
+        except IOError:
+            pass
+        try:
+            path = os.path.join(self.source, 'skipped', '*' + self.ext))
+            skipped = [fp for fp in glob.glob(path)]
+        except IOError:
+            pass
+        else:
+            for src in skipped:
+                dst = os.path.join(self.source)
+                shutil.move(src, dst)
+
         tiles = [fp for fp in glob.glob(os.path.join(self.source,
                                                      '*' + self.ext))]
 
@@ -280,9 +298,9 @@ class Selector(object):
                 if (sprite_x < x < sprite_x + sprite.width
                     and sprite_y < y < sprite_y + sprite.height):
                     sprite.color = (255, 0, 0)
-                    break
-            else:
-                sprite.color = (255, 255, 255)
+                else:
+                    sprite.color = (255, 255, 255)
+            time.sleep(0.1)
 
         pyglet.app.run()
 
