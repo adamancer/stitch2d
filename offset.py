@@ -12,10 +12,9 @@ from random import randint
 
 import pyglet.text
 import pyglet.window
+from PIL import Image
 from pyglet.window import key, mouse
 from pyglet.gl.base import CanvasConfig, Context
-
-from PIL import Image
 
 
 
