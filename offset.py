@@ -23,7 +23,19 @@ class OffsetEngine(pyglet.window.Window):
 
 
     def __init__(self, rows, same_row=True, offsets=None, *args, **kwargs):
-        super(OffsetEngine, self).__init__(*args, visible=False, **kwargs)
+        # Set window size in init because Windows doesn't pick up
+        # set_size() reliably.
+        platform = pyglet.window.get_platform()
+        display = platform.get_default_display()
+        screen = display.get_default_screen()
+        margin = 75
+        super(OffsetEngine, self).__init__(
+            *args,
+            width=screen.width - margin * 2,
+            height=screen.height - margin * 2,
+            visible=False,
+            **kwargs)
+        self.set_location(margin, margin)
 
         self.rows = rows
         self.num_cols = len(rows[0])
@@ -42,8 +54,8 @@ class OffsetEngine(pyglet.window.Window):
         if offsets:
             try:
                 self.x_offset_within_row = offsets[0]
-                self.x_offset_between_rows = offsets[1]
-                self.y_offset_within_row = 0
+                self.x_offset_between_rows = 0
+                self.y_offset_within_row = offsets[1]
                 self.y_offset_between_rows = 1
             except IndexError:
                 print 'Provided offsets no good'
@@ -52,14 +64,6 @@ class OffsetEngine(pyglet.window.Window):
             self.x_offset_between_rows = 0
             self.y_offset_within_row = 0
             self.y_offset_between_rows = 0  # final value should be <= 0
-
-        platform = pyglet.window.get_platform()
-        display = platform.get_default_display()
-        screen = display.get_default_screen()
-        margin = 75
-        self.width = screen.width - margin * 2
-        self.height = screen.height - margin * 2
-        self.set_location(margin, margin)
 
         self.hand = self.get_system_mouse_cursor(self.CURSOR_HAND)
         self.crosshair = self.get_system_mouse_cursor(self.CURSOR_CROSSHAIR)
@@ -268,7 +272,7 @@ class OffsetEngine(pyglet.window.Window):
         # If selector has been run on the tileset, there will be
         # gaps represented by empty strings. From a content
         # standpoint, we don't care about these, but we need to
-        # check for them because PIL doesn't care for them.
+        # try them because PIL can't process them.
         try:
             tiles = [Image.open(tile).convert('RGBA') for tile in tiles]
         except:
