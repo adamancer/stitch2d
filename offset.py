@@ -207,12 +207,12 @@ class OffsetEngine(pyglet.window.Window):
                         self.x_offset_within_row = x1 - x2
                         self.y_offset_within_row = y2 - y1
                     else:
-                        self.coordinates.sort(key=lambda s:s[0])
+                        self.coordinates.sort(key=lambda s:s[1])
                         x1y1, x2y2 = self.coordinates
                         x1, y1 = x1y1
                         x2, y2 = x2y2
-                        self.x_offset_within_row = x1 - x2
-                        self.y_offset_within_row = y2 - y1
+                        self.x_offset_between_rows = x2 - x1
+                        self.y_offset_between_rows = y1 - y2
                     self.apply_offset()
 
 
@@ -340,10 +340,8 @@ class OffsetEngine(pyglet.window.Window):
             h = self.height / 2
             x = self.x_offset_between_rows
             y = self.y_offset_between_rows
-        self.sprites[1].x = (w + self.x_offset_within_row +
-                             self.x_offset_between_rows)
-        self.sprites[1].y = -(self.y_offset_within_row +
-                              self.y_offset_between_rows)
+        self.sprites[1].x = w + x
+        self.sprites[1].y = -y
         self.labels['offset'].text = '{}x{}'.format(x, y)
         if not self.labels['offset'].text in ('0x1','1x0'):
             self.sprites[1].opacity = 144
