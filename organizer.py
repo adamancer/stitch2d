@@ -47,11 +47,15 @@ def organizer(src_dir=None, dst_dir=None):
         dst_dir = tkFileDialog.askdirectory(parent=root, title=title,
                                             initialdir=initial)
     print 'Destination directory is {}'.format(dst_dir)
+    total = 0
+    moved = 0
+    exist = 0
     for fp in glob.iglob(os.path.join(src_dir, '*.tif')):
         # Set directory name
         fn = os.path.basename(fp)
         dn = get_name(fn)
         if dn:
+            total += 1
             # Create directory if neccesary
             try:
                 os.mkdir(os.path.join(dst_dir, dn))
@@ -71,7 +75,10 @@ def organizer(src_dir=None, dst_dir=None):
                 except IOError:
                     print 'Could not write to destination. Out of space?'
                     raise
+                else:
+                    exist += 1
             else:
                 #print '{} already exists!'.format(os.path.basename(dst))
-                pass
-    print 'Done!'
+                moved += 1
+    print ('{:,} files processed ({:,} moved,'
+           ' {:,} already existed)').format(total, exist, moved)
