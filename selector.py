@@ -31,12 +31,28 @@ class Selector(object):
         if not path:
             root = Tkinter.Tk()
             root.withdraw()
-            title = ("Please select the directory containing your tiles:")
+            title = ('Please select the directory containing your tiles:')
             initial = os.path.expanduser('~')
             self.source = tkFileDialog.askdirectory(parent=root, title=title,
                                                     initialdir=initial)
         else:
             self.source = path
+
+        # Confirm that tiles exist in the selected directory
+        tiles = [fp for fp in glob.glob(os.path.join(self.source,
+                                                     '*' + self.ext))]
+        if not len(tiles):
+            dn = [os.path.join(self.source, dn)
+                  for dn in os.listdir(self.source)
+                  if os.path.isdir(os.path.join(self.source, dn))][0]
+            self.source = dn
+            tiles = [fp for fp in glob.glob(os.path.join(self.source,
+                                                         '*' + self.ext))]
+            if not len(tiles):
+                print 'No tiles find in selected directory!'
+            else:
+                print ('Selected directory is empty. Using child directory {}'
+                       ' instead').format(os.path.basename(self.source))
         print 'Source is {}'.format(self.source)
 
         # Reintegrate previously skipped files if they exist
@@ -57,9 +73,6 @@ class Selector(object):
             for src in skipped:
                 dst = os.path.join(self.source)
                 shutil.move(src, dst)
-
-        tiles = [fp for fp in glob.glob(os.path.join(self.source,
-                                                     '*' + self.ext))]
 
         # Get window dimensions. These will be used to set the size of
         # the pyglet window later.
@@ -130,16 +143,18 @@ class Selector(object):
         cols = []
         grid = {}
         for fp in glob.iglob(os.path.join(self.source, '*' + self.ext)):
-            img = Image.open(fp)
-            mask = Image.new('L', img.size, 'white')
+            # Standardize color space to RGB to prevent problems
+            img = Image.open(fp).convert('RGB')
+            mask = Image.new('RGB', img.size, (255,255,255))
             img = Image.blend(img, mask, 0.35)
-            img.mode = 'L'
             # Calculate coordinates
             try:
-                key = os.path.splitext(fp)[0].split('@')[1].rstrip(']')
+                key = os.path.splitext(fp)[0].split('@')[1].split(']')[0]
             except IndexError:
-                raw_input("Malformatted filename: Check folder for"
-                          " images that aren't part of the grid")
+                print fill("Malformatted filename ({}):"
+                           " Check folder for images that aren't"
+                           " part of the grid").format(os.path.basename(fp),
+                           subsequent_indent=' ')
                 raise
             x, y = key.split(' ')
             cols.append(int(x))
@@ -147,7 +162,7 @@ class Selector(object):
             grid[key] = (copy(img), fp)
 
         self.num_cols = max(cols) + 1
-        self.num_rows = len(grid) / self.num_cols
+        self.num_rows = len(grid) / self.num_cols + 1
 
         filenames = {}
         for key in grid.keys():
@@ -196,12 +211,17 @@ class Selector(object):
         for row in rows:
             n_col = 0  # index of column
             for img in row:
-                w, h = img.size
-                x = n_col * (w + 1)
-                y = adjusted_height - (n_row + 1) * (h + 1)
-                img = self.pil_to_pyglet(img, 'RGB')
-                sprites.append(pyglet.sprite.Sprite(img, x=x, y=y, batch=batch))
-                tiles.append((n_col, n_row))
+                try:
+                    w, h = img.size
+                except AttributeError:
+                    pass
+                else:
+                    x = n_col * (w + 1)
+                    y = adjusted_height - (n_row + 1) * (h + 1)
+                    img = self.pil_to_pyglet(img, 'RGB')
+                    sprites.append(pyglet.sprite.Sprite(img, x=x, y=y,
+                                                        batch=batch))
+                    tiles.append((n_col, n_row))
                 n_col += 1
             n_row += 1
 
@@ -287,6 +307,10 @@ class Selector(object):
                     os.mkdir(os.path.dirname(dst))
                     shutil.move(src, dst)
             with open(fp, 'wb') as f:
+                # Include dimensions so mosaic can accurately calculate
+                # the size of the grid
+                f.write('Dimensions: {}x{}\n'.format(self.num_cols,
+                                                     self.num_rows))
                 f.write('\n'.join([str(i) for i in sorted(indexes)]))
             fp = os.path.join(self.source, 'selected.jpg')
             pyglet.image.get_buffer_manager().get_color_buffer().save(fp)
