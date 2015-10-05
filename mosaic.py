@@ -9,6 +9,7 @@ import tkFileDialog
 from copy import copy
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
+from textwrap import fill
 
 from ..helpers import prompt
 from .offset import OffsetEngine
@@ -30,7 +31,7 @@ class Counter(dict):
 class Mosaic(object):
 
 
-    def __init__(self, path, jpeg=False):
+    def __init__(self, path, jpeg=False, skipped=None):
         # Properties of the Mosaic object:
         #  self.filename (str, specific)
         #  self.name (str, specific)
@@ -63,6 +64,7 @@ class Mosaic(object):
             self.image_types = dict([(row[0].lower(), row[1])
                                       for row in rows if bool(row[0])
                                       and not row[0].startswith('#')])
+        self.skipped = skipped
         self.get_tile_parameters(path)
         self.set_mosaic_parameters()
 
@@ -113,7 +115,7 @@ class Mosaic(object):
         try:
             self.num_cols
         except:
-            self.num_cols = int(prompt(' Number of columns:', '\d+'))
+            self.num_cols = prompt(' Number of columns:', '\d+')
             self.num_cols = int(self.num_cols)
         else:
             print (' Number of columns: {} (determined from'
@@ -224,9 +226,12 @@ class Mosaic(object):
         mosaic.save(fp, self.extmap[self.ext])
         if self.jpeg and self.extmap[self.ext] != 'JPEG':
             print 'Saving as JPEG...'
-            jpeg = mosaic.resize((mosaic_width / 2, mosaic_height / 2))
             fp = os.path.splitext(fp)[0] + '.jpg'
-            jpeg.save(fp, 'JPEG')
+            try:
+                mosaic = mosaic.resize((mosaic_width / 2, mosaic_height / 2))
+            except:
+                pass
+            mosaic.save(fp, 'JPEG')
         print 'Mosaic complete! (t={})'.format(datetime.now() - start_time)
         # Clear folder-specific parameters. These will be repopulated
         # automatically if the same Mosaic object is used for a
@@ -295,7 +300,10 @@ class Mosaic(object):
                 i = key
             temp[i] = tile
         if len(cols):
-            self.num_cols = max(cols) + 1
+            try:
+                self.num_cols
+            except:
+                self.num_cols = max(cols) + 1
             for key in temp.keys():
                 x, y = key.split(' ')
                 i = int(x) + self.num_cols * int(y)
@@ -323,12 +331,22 @@ class Mosaic(object):
     def patch_tiles(self, tiles):
         """Returns sorted list of tiles including patches"""
         try:
-            f = open(os.path.join(self.path, 'skipped.txt'), 'rb')
+            self.skipped
         except:
+            try:
+                self.skipped = handle_skipped(self.path)
+            except:
+                return tiles
+        if not len(self.skipped):
             return tiles
+        else:
+            # Get grid dimensions. These can get screwed up if an
+            # entire column is removed.
+            self.num_cols = int(self.skipped.pop(0)
+                                .split(': ', 1)[1]
+                                .split('x', 1)[0])
         sequence = {}
-        skipped = [int(i.strip()) for i in f.read().splitlines()]
-        for i in skipped:
+        for i in self.skipped:
             sequence[i] = ''
         i = 0
         for tile in tiles:
@@ -349,7 +367,8 @@ class Mosaic(object):
 
 
 
-def mosey(path=None, jpeg=False):
+
+def mosey(path=None, jpeg=False, skipped=None):
     """Helper function for stitching a set of directories all at once"""
     if not path:
         root = Tkinter.Tk()
@@ -358,12 +377,26 @@ def mosey(path=None, jpeg=False):
         initial = os.path.expanduser('~')
         path = tkFileDialog.askdirectory(parent=root, title=title,
                                          initialdir=initial)
+    # Check for tiles. If none found, try the parent directory.
     tilesets = [os.path.join(path, dn) for dn in os.listdir(path)
-                if os.path.isdir(os.path.join(path, dn))]
-    # Element maps can be hit or miss for setting offsets, so we shift
+                if os.path.isdir(os.path.join(path, dn))
+                and not dn == 'skipped']
+    if not len(tilesets):
+        print fill('No subdirectories found in {}. Processing main'
+                   ' directory instead.'.format(path), subsequent_indent=' ')
+        tilesets = [path]
+    # Check for skipped files. By default, mosey will check all
+    # subdirectories of the main directory for skipped file list and then
+    # apply that list to everything processed in the current job. Also,
+    # element maps can be hit or miss for setting offsets, so we shift
     # backscatter images to top of the list if they're available.
     for path in copy(tilesets):
-        if 'bsed' in path:
+        if not skipped:
+            try:
+                skipped = handle_skipped(path)
+            except IOError:
+                pass
+        if 'bsed' in path or '_Si' in path:
             tilesets.insert(0, tilesets.pop(tilesets.index(path)))
     for path in tilesets:
         print '-' * 80
@@ -371,7 +404,22 @@ def mosey(path=None, jpeg=False):
         try:
             mosaic.create_mosaic(path)
         except NameError:
-            mosaic = Mosaic(path, jpeg).create_mosaic()
+            mosaic = Mosaic(path, jpeg, skipped).create_mosaic()
+
+
+
+
+def handle_skipped(path):
+    try:
+        f = open(os.path.join(path, 'skipped.txt'), 'rb')
+    except:
+        return []
+    else:
+        try:
+            return [int(i.strip()) if i.isdigit() else i.strip()
+                    for i in f.read().splitlines()]
+        except TypeError:
+            raise
 
 
 
@@ -383,4 +431,9 @@ def mandolin(lst, n):
     @param int
     @return list
     """
-    return [lst[i*n:(i+1)*n] for i in range(len(lst) / n)]
+    mandolined = [lst[i*n:(i+1)*n] for i in range(len(lst) / n)]
+    remainder = len(lst) % n
+    if remainder:
+        leftovers = lst[-remainder:]
+        mandolined.append(leftovers + [''] * (n - len(leftovers)))
+    return mandolined
