@@ -159,7 +159,7 @@ class Selector(object):
             x, y = key.split(' ')
             cols.append(int(x))
             w, h = img.size
-            grid[key] = (copy(img), fp)
+            grid[key] = (img, fp)
 
         self.num_cols = max(cols) + 1
         self.num_rows = len(grid) / self.num_cols + 1

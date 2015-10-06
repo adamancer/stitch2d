@@ -74,23 +74,34 @@ class Mosaic(object):
     def get_tile_parameters(self, path):
         """Determine parameters for tiles in path"""
         self.path = path
-        exts = Counter()
-        dims = Counter()
-        tiles = []
-        for fn in os.listdir(path):
-            fp = os.path.join(path, fn)
-            try:
-                img = Image.open(fp)
-            except:
-                continue
-            else:
-                exts.add(os.path.splitext(fn)[1])
-                dims.add('x'.join([str(x) for x in img.size]))
-                tiles.append(fp.encode('latin1').decode('latin1'))
-        self.ext = [key for key in exts
-                    if exts[key] == max(exts.values())][0].lower()
-        dim = [key for key in dims if dims[key] == max(dims.values())][0]
-        self.w, self.h = [int(x) for x in dim.split('x')]
+        try:
+            self.ext
+            self.w
+            self.h
+        except AttributeError:
+            # Tile parameters not set, so we'll assign them now
+            print 'Getting tile parameters...'
+            exts = Counter()
+            dims = Counter()
+            tiles = []
+            for fn in os.listdir(path):
+                fp = os.path.join(path, fn)
+                try:
+                    img = Image.open(fp)
+                except:
+                    continue
+                else:
+                    exts.add(os.path.splitext(fn)[1])
+                    dims.add('x'.join([str(x) for x in img.size]))
+                    tiles.append(fp.encode('latin1').decode('latin1'))
+            self.ext = [key for key in exts
+                        if exts[key] == max(exts.values())][0].lower()
+            dim = [key for key in dims if dims[key] == max(dims.values())][0]
+            self.w, self.h = [int(x) for x in dim.split('x')]
+        else:
+            tiles = [fp.encode('latin1').decode('latin1')
+                     for fp in glob.glob(os.path.join(path, '*' + self.ext))]
+        # Get name
         self.filename = unicode(os.path.basename(path))
         try:
             self.name, image_type = self.filename.rsplit('_', 1)
@@ -136,11 +147,17 @@ class Mosaic(object):
         self.y_offset_between_rows = offset[3]
         # Review parameters
         print 'Review parameters for your mosaic:'
-        print ' Dimensions:   ', '{}x{}'.format(self.num_cols, self.num_rows)
-        print ' Magnification:', self.mag
-        print ' Offset:       ', offset
-        print ' Snake:        ', self.snake
-        print ' Create JPEG:  ', self.jpeg
+        print ' Dimensions:         ', '{}x{}'.format(self.num_cols,
+                                                    self.num_rows)
+        print ' Magnification:      ', self.mag
+        print ' Offset within row:  ', '{}x{}'.format(
+                    self.x_offset_within_row,
+                    self.y_offset_within_row)
+        print ' Offset between rows:', '{}x{}'.format(
+                    self.x_offset_between_rows,
+                    self.y_offset_between_rows)
+        print ' Snake:              ', self.snake
+        print ' Create JPEG:        ', self.jpeg
         if prompt('Do these parameters look good?', yes_no):
             return self
         else:
@@ -152,7 +169,7 @@ class Mosaic(object):
     def create_mosaic(self, path=None, label=True):
         """Create a mosaic from a set a tiles with known, fixed offsets"""
         start_time = datetime.now()
-        # Folder-specific parameters are cleared when the mosaic is
+        # Folder-specific parameters are cleared when the mosai`c is
         # done stitching, but most parameters carry over, allowing a
         # bunch of mosaics to be run at once with the same settings.
         if path:
@@ -177,10 +194,10 @@ class Mosaic(object):
         print 'Mosaic will be {:,} by {:,} pixels'.format(mosaic_width,
                                                           mosaic_height)
         mosaic = Image.new('RGB', (mosaic_width, mosaic_height), (255,255,255))
+        print 'Stitching mosaic...'
         # Now that the canvas has been created, we can paste the
         # individual tiles on top of it. Coordinates increase from
         # (0,0) in the top left corner.
-        print 'Stitching mosaic...'
         n_row = 0  # index of row
         for row in self.rows:
             if self.snake and not (n_row + 1) % 2:
@@ -233,6 +250,23 @@ class Mosaic(object):
                 pass
             mosaic.save(fp, 'JPEG')
         print 'Mosaic complete! (t={})'.format(datetime.now() - start_time)
+        # Write job parameters to file. This could be embedded in
+        # the metadata.
+        params = [
+            self.filename,
+            '-' * len(self.filename),
+            'Dimensions: {}x{}'.format(self.num_cols, self.num_rows),
+            'Offset within row: {}x{}'.format(self.x_offset_within_row,
+                                              self.y_offset_within_row),
+            'Offset between rows: {}x{}'.format(self.x_offset_between_rows,
+                                                self.y_offset_between_rows),
+            'Magnification: {}'.format(self.mag),
+            'Snake: {}'.format(self.snake),
+            ''
+        ]
+        fp = os.path.join(self.path, os.pardir, self.filename + '.txt')
+        with open(fp, 'wb') as f:
+            f.write('\n'.join(params))
         # Clear folder-specific parameters. These will be repopulated
         # automatically if the same Mosaic object is used for a
         # different filepath. This isn't crucial--these values should
@@ -340,13 +374,21 @@ class Mosaic(object):
         if not len(self.skipped):
             return tiles
         else:
-            # Get grid dimensions. These can get screwed up if an
-            # entire column is removed.
-            self.num_cols = int(self.skipped.pop(0)
-                                .split(': ', 1)[1]
-                                .split('x', 1)[0])
+            # Get grid dimensions from skipped file, then check
+            # length of tiles against the number of skipped tiles
+            # to see.
+            dim = self.skipped[0].split(': ', 1)[1].strip()
+            self.num_cols, self.num_rows =  [int(x) for x in dim.split('x')]
+            remainder = len(tiles) % self.num_cols
+            n = self.num_cols * self.num_rows
+            if n == len(tiles) + (self.num_cols - remainder):
+                for i in self.skipped[1:]:
+                    tiles[i] = ''
+                return tiles
+        # Insert blanks where they should fall in the tile sequence,
+        # then fill the tiles around them.
         sequence = {}
-        for i in self.skipped:
+        for i in self.skipped[1:]:
             sequence[i] = ''
         i = 0
         for tile in tiles:
@@ -390,16 +432,22 @@ def mosey(path=None, jpeg=False, skipped=None):
     # apply that list to everything processed in the current job. Also,
     # element maps can be hit or miss for setting offsets, so we shift
     # backscatter images to top of the list if they're available.
+    skiplists = []
     for path in copy(tilesets):
-        if not skipped:
-            try:
-                skipped = handle_skipped(path)
-            except IOError:
-                pass
-        if 'bsed' in path or '_Si' in path:
+        try:
+            skipped = handle_skipped(path)
+        except IOError:
+            pass
+        else:
+            skiplists.append(path)
+        if 'bsed' in path:
             tilesets.insert(0, tilesets.pop(tilesets.index(path)))
+    if len(skiplists) > 1:
+        print 'Warning: Multiple skip lists found:\n ' + ' \n'.join(skiplists)
+    if skipped:
+        print fill('Using list of skipped tiles'
+                   ' from {}'.format(skiplists[0]), subsequent_indent=' ')
     for path in tilesets:
-        print '-' * 80
         print 'New tileset: {}'.format(os.path.basename(path))
         try:
             mosaic.create_mosaic(path)
