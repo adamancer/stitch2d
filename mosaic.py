@@ -99,8 +99,6 @@ class Mosaic(object):
                         # IM-created tiles should always be readable by PIL.
                         ext = os.path.splitext(fp)[1].lower()
                         if ext in self.extmap:
-                            print ('There was a problem opening'
-                                   ' some of the tiles!')
                             self.workaround = mogrify(path, ext)
                             if self.workaround:
                                 path = os.path.join(path, 'working')
@@ -108,7 +106,7 @@ class Mosaic(object):
                             else:
                                 print ('Could not fix the unreadable tiles.'
                                        ' Try installing ImageMagick and'
-                                       ' re-running this script.'
+                                       ' re-running this script.')
                                 raise
                     else:
                         exts.add(os.path.splitext(fn)[1])
@@ -123,11 +121,15 @@ class Mosaic(object):
                     break
         else:
             print 'Using tile parameters from the last mosaic'
-            if self.workaround:
-                mogrify(path, self.ext)
-                path = os.path.join(path, 'working')
             tiles = [fp.encode('latin1').decode('latin1')
                      for fp in glob.glob(os.path.join(path, '*' + self.ext))]
+            try:
+                Image.open(tiles[0])
+            except:
+                mogrify(path, self.ext)
+                path = os.path.join(path, 'working')
+                tiles = [fp.encode('latin1').decode('latin1') for fp
+                         in glob.glob(os.path.join(path, '*' + self.ext))]
         if self.workaround:
             path = os.path.split(path)[0]
         # Get name
@@ -202,7 +204,7 @@ class Mosaic(object):
     def create_mosaic(self, path=None, label=True):
         """Create a mosaic from a set a tiles with known, fixed offsets"""
         start_time = datetime.now()
-        # Folder-specific parameters are cleared when the mosai`c is
+        # Folder-specific parameters are cleared when the mosaic is
         # done stitching, but most parameters carry over, allowing a
         # bunch of mosaics to be run at once with the same settings.
         if path:
@@ -391,7 +393,8 @@ class Mosaic(object):
         if len(missing) and not len(empties):
             print 'Warning: The following tiles appear to be missing:'
             for key in sorted(missing):
-                print ' Index: {}'.format(key)
+                print 'Index {}'.format(key)
+                tiles.insert(key-1, '')
         else:
             print 'All tiles appear to be present'
         self.tiles = tiles
@@ -529,7 +532,8 @@ def mandolin(lst, n):
 
 def mogrify(path, ext):
     """Saves copy of tiles to subfolder"""
-    print 'Copying tiles into a usable format...'
+    print ('There was a problem opening some of the tiles!\n'
+           'Copying tiles into a usable format...')
     ext = ext.strip('*.')
     subdir = os.path.join(path, 'working')
     try:
