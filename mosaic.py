@@ -1,7 +1,9 @@
 import csv
 import glob
 import os
+import shlex
 import shutil
+import subprocess
 import sys
 import time
 import Tkinter
@@ -65,6 +67,7 @@ class Mosaic(object):
                                       for row in rows if bool(row[0])
                                       and not row[0].startswith('#')])
         self.skipped = skipped
+        self.workaround = False  # tracks TIFF reading nightmare
         self.get_tile_parameters(path)
         self.set_mosaic_parameters()
 
@@ -84,23 +87,49 @@ class Mosaic(object):
             exts = Counter()
             dims = Counter()
             tiles = []
-            for fn in os.listdir(path):
-                fp = os.path.join(path, fn)
-                try:
-                    img = Image.open(fp)
-                except:
-                    continue
+            while True:
+                for fn in os.listdir(path):
+                    fp = os.path.join(path, fn)
+                    try:
+                        img = Image.open(fp)
+                    except:
+                        # This is a clumsy solution to PIL's unreliability
+                        # reading TIFFs. It uses ImageMagick to copy
+                        # the unreadable tiles to a subdirectory; the
+                        # IM-created tiles should always be readable by PIL.
+                        ext = os.path.splitext(fp)[1].lower()
+                        if ext in self.extmap:
+                            print ('There was a problem opening'
+                                   ' some of the tiles!')
+                            self.workaround = mogrify(path, ext)
+                            if self.workaround:
+                                path = os.path.join(path, 'working')
+                                break
+                            else:
+                                print ('Could not fix the unreadable tiles.'
+                                       ' Try installing ImageMagick and'
+                                       ' re-running this script.'
+                                raise
+                    else:
+                        exts.add(os.path.splitext(fn)[1])
+                        dims.add('x'.join([str(x) for x in img.size]))
+                        tiles.append(fp.encode('latin1').decode('latin1'))
                 else:
-                    exts.add(os.path.splitext(fn)[1])
-                    dims.add('x'.join([str(x) for x in img.size]))
-                    tiles.append(fp.encode('latin1').decode('latin1'))
-            self.ext = [key for key in exts
-                        if exts[key] == max(exts.values())][0].lower()
-            dim = [key for key in dims if dims[key] == max(dims.values())][0]
-            self.w, self.h = [int(x) for x in dim.split('x')]
+                    self.ext = [key for key in exts
+                                if exts[key] == max(exts.values())][0].lower()
+                    dim = [key for key in dims
+                           if dims[key] == max(dims.values())][0]
+                    self.w, self.h = [int(x) for x in dim.split('x')]
+                    break
         else:
+            print 'Using tile parameters from the last mosaic'
+            if self.workaround:
+                mogrify(path, self.ext)
+                path = os.path.join(path, 'working')
             tiles = [fp.encode('latin1').decode('latin1')
                      for fp in glob.glob(os.path.join(path, '*' + self.ext))]
+        if self.workaround:
+            path = os.path.split(path)[0]
         # Get name
         self.filename = unicode(os.path.basename(path))
         try:
@@ -135,6 +164,9 @@ class Mosaic(object):
         self.mag = int(self.mag)
         self.snake = prompt(' Snake pattern?', yes_no)
         self.rows = mandolin(self.tiles, self.num_cols)
+        if self.snake:
+            for i in [i for i in xrange(0, len(self.rows)) if i % 2]:
+                self.rows[i]= self.rows[i][::-1]
         self.num_rows = len(self.rows)
         print 'Setting offset...'
         engine = OffsetEngine(self.rows, True)
@@ -161,6 +193,7 @@ class Mosaic(object):
         if prompt('Do these parameters look good?', yes_no):
             return self
         else:
+            del self.num_cols
             self.set_mosaic_parameters()
 
 
@@ -175,6 +208,9 @@ class Mosaic(object):
         if path:
             self.get_tile_parameters(path)
             self.rows = mandolin(self.tiles, self.num_cols)
+            if self.snake:
+                for i in [i for i in xrange(0, len(self.rows)) if i % 2]:
+                    self.rows[i]= self.rows[i][::-1]
             self.num_rows = len(self.rows)
         # The dimensions of the mosaic are determined by the
         # tile dimensions minus the offsets between rows and
@@ -200,8 +236,6 @@ class Mosaic(object):
         # (0,0) in the top left corner.
         n_row = 0  # index of row
         for row in self.rows:
-            if self.snake and not (n_row + 1) % 2:
-                row = row[::-1]
             n_col = 0  # index of column
             for fp in row:
                 if bool(fp):
@@ -267,16 +301,19 @@ class Mosaic(object):
         fp = os.path.join(self.path, os.pardir, self.filename + '.txt')
         with open(fp, 'wb') as f:
             f.write('\n'.join(params))
-        # Clear folder-specific parameters. These will be repopulated
-        # automatically if the same Mosaic object is used for a
-        # different filepath. This isn't crucial--these values should
-        # be overwritten by future uses of the same Mosaic instance.
+        # Clear folder-specific parameters. This isn't crucial--these
+        # values should be overwritten by future uses of the same Mosaic
+        # instance.
         try:
             del self.filename
             del self.tiles
             del self.rows
             del self.name
         except AttributeError:
+            pass
+        try:
+            shutil.rmtree(os.path.join(self.path, 'working'))
+        except OSError:
             pass
         return self
 
@@ -331,7 +368,7 @@ class Mosaic(object):
                 cols.append(int(x))
                 i = key
             except ValueError:
-                i = key
+                i = int(key)
             temp[i] = tile
         if len(cols):
             try:
@@ -439,14 +476,15 @@ def mosey(path=None, jpeg=False, skipped=None):
         except IOError:
             pass
         else:
-            skiplists.append(path)
+            if skipped:
+                skiplists.append(path)
         if 'bsed' in path:
             tilesets.insert(0, tilesets.pop(tilesets.index(path)))
     if len(skiplists) > 1:
         print 'Warning: Multiple skip lists found:\n ' + ' \n'.join(skiplists)
     if skipped:
         print fill('Using list of skipped tiles'
-                   ' from {}'.format(skiplists[0]), subsequent_indent=' ')
+                   ' from {}'.format(skiplists.pop(0)), subsequent_indent=' ')
     for path in tilesets:
         print 'New tileset: {}'.format(os.path.basename(path))
         try:
@@ -485,3 +523,24 @@ def mandolin(lst, n):
         leftovers = lst[-remainder:]
         mandolined.append(leftovers + [''] * (n - len(leftovers)))
     return mandolined
+
+
+
+
+def mogrify(path, ext):
+    """Saves copy of tiles to subfolder"""
+    print 'Copying tiles into a usable format...'
+    ext = ext.strip('*.')
+    subdir = os.path.join(path, 'working')
+    try:
+        os.mkdir(subdir)
+    except OSError:
+        pass
+    cmd = 'mogrify -path "{0}" -format {1} *.{1}'.format(subdir, ext)
+    args = shlex.split(cmd)
+    try:
+        subprocess.call(args, cwd=path)
+    except:
+        return False
+    else:
+        return True
