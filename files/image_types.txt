@@ -3,7 +3,10 @@
 ################################################################################
 "unspecified","unspecified image type"
 "ref","petrographic microscope, reflected light"
+"rfl","petrographic microscope, reflected light"
+"ppl","petrographic microscope, transmitted light"
 "trans","petrographic microscope, transmitted light"
+"xpl","petrographic microscope, cross-polarized light"
 "xpol","petrographic microscope, cross-polarized light"
 "bsed","SEM, backscatter"
 "nbsed","SEM, normalized backscatter"
