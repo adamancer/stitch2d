@@ -104,9 +104,10 @@ class Mosaic(object):
                                 path = os.path.join(path, 'working')
                                 break
                             else:
-                                print ('Could not fix the unreadable tiles.'
-                                       ' Try installing ImageMagick and'
-                                       ' re-running this script.')
+                                print ('Encountered unreadable tiles but'
+                                       ' could not fix them. Try installing'
+                                       ' ImageMagick and re-running this'
+                                       ' script.')
                                 raise
                     else:
                         exts.add(os.path.splitext(fn)[1])
@@ -126,7 +127,7 @@ class Mosaic(object):
             try:
                 Image.open(tiles[0])
             except:
-                mogrify(path, self.ext)
+                self.workaround = mogrify(path, self.ext)
                 path = os.path.join(path, 'working')
                 tiles = [fp.encode('latin1').decode('latin1') for fp
                          in glob.glob(os.path.join(path, '*' + self.ext))]
@@ -252,7 +253,13 @@ class Mosaic(object):
                     if self.y_offset_within_row < 0:
                         y -= self.y_offset_within_row * (self.num_cols - 1)
                     # Encode the name
-                    mosaic.paste(Image.open(fp.encode('cp1252')), (x, y))
+                    try:
+                        mosaic.paste(Image.open(fp.encode('cp1252')), (x, y))
+                    except:
+                        print ('Encountered unreadable tiles but'
+                               ' could not fix them. Try installing'
+                               ' ImageMagick and re-running this'
+                               ' script.')
                 n_col += 1
             n_row += 1
         # Add label
