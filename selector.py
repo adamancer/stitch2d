@@ -248,6 +248,31 @@ class Selector(object):
 
 
         @window.event
+        def on_mouse_press(x, y, button, modifiers):
+            for sprite in sprites:
+                sprite_x, sprite_y = sprite.position
+                if (sprite_x < x < sprite_x + sprite.width
+                    and sprite_y < y < sprite_y + sprite.height):
+                    if sprite.visible:
+                        sprite.visible = False
+                    else:
+                        sprite.visible = True
+                    break
+
+
+        @window.event
+        def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
+            if buttons & (pyglet.window.mouse.LEFT or pyglet.window.mouse.RIGHT):
+                for sprite in sprites:
+                    sprite_x, sprite_y = sprite.position
+                    if (sprite_x < x < sprite_x + sprite.width
+                        and sprite_y < y < sprite_y + sprite.height):
+                        if sprite.visible:
+                            sprite.visible = False
+                        break
+
+
+        @window.event
         def on_close():
             i = 0
             keep = []
