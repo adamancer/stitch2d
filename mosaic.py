@@ -305,7 +305,10 @@ class Mosaic(object):
                                                 self.y_offset_between_rows),
             'Magnification: {}'.format(self.mag),
             'Snake: {}'.format(self.snake),
-            ''
+            '',
+            #('Mosaic created using'
+            #  ' MinSci Toolkit {}').format(minsci.__version__),
+            #''
         ]
         fp = os.path.join(self.path, os.pardir, self.filename + '.txt')
         with open(fp, 'wb') as f:
@@ -418,7 +421,7 @@ class Mosaic(object):
                 self.skipped = handle_skipped(self.path)
             except:
                 return tiles
-        if not len(self.skipped):
+        if not self.skipped:
             return tiles
         else:
             # Get grid dimensions from skipped file, then check
@@ -508,14 +511,14 @@ def mosey(path=None, jpeg=False, skipped=None):
 def handle_skipped(path):
     try:
         f = open(os.path.join(path, 'skipped.txt'), 'rb')
-    except:
-        return []
+    except OSError:
+        raise OSError
     else:
         try:
             return [int(i.strip()) if i.isdigit() else i.strip()
                     for i in f.read().splitlines()]
         except TypeError:
-            raise
+            raise TypeError
 
 
 

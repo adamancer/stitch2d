@@ -86,6 +86,9 @@ class OffsetEngine(pyglet.window.Window):
         else:
             self.set_caption('Set offset between tiles in different rows')
 
+        self.n_row = 0
+        self.n_col = 0
+
         self.color = (255,255,255,255)
         self.label_batch = pyglet.graphics.Batch()
         self.labels = {}
@@ -125,6 +128,13 @@ class OffsetEngine(pyglet.window.Window):
             x = self.width - 8,
             y = 8,
             anchor_x='right',
+            anchor_y='bottom',
+            batch=self.label_batch)
+        self.labels['coordinates'] = pyglet.text.Label(
+            'Tile: {}x{}'.format(self.n_row, self.n_col),
+            x = 8,
+            y = 8,
+            anchor_x='left',
             anchor_y='bottom',
             batch=self.label_batch)
         for key in self.labels:
@@ -259,7 +269,8 @@ class OffsetEngine(pyglet.window.Window):
             try:
                 tiles = row[n_col], row[n_col+1]
             except IndexError:
-                tiles = row[n_col-1], row[n_col]
+                n_col -= 1
+                tiles = row[n_col], row[n_col+1]
         elif not self.same_row and self.num_rows > 1:
             try:
                 self.rows[n_row+1]
@@ -268,7 +279,11 @@ class OffsetEngine(pyglet.window.Window):
             try:
                 tiles = [self.rows[n_row][n_col], self.rows[n_row+1][n_col]]
             except:
-                tiles = [self.rows[n_row][n_col-1], self.rows[n_row+1][n_col]]
+                n_col -= 1
+                tiles = [self.rows[n_row][n_col], self.rows[n_row+1][n_col]]
+        self.n_row = n_row
+        self.n_col = n_col
+        self.labels['coordinates'].text = 'Tile: {}x{}'.format(n_row, n_col)
         # If selector has been run on the tileset, there will be
         # gaps represented by empty strings. From a content
         # standpoint, we don't care about these, but we need to
