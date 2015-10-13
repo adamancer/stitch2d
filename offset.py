@@ -1,5 +1,3 @@
-#graphical interface to determine offset
-
 import ctypes
 import os
 import pyglet
