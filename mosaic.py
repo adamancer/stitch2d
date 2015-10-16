@@ -164,7 +164,7 @@ class Mosaic(object):
             print (' Number of columns: {} (determined from'
                    ' filenames)').format(self.num_cols)
         self.mag = prompt(' Magnification:', '\d+')
-        self.mag = int(self.mag)
+        self.mag = float(self.mag)
         self.snake = prompt(' Snake pattern?', yes_no)
         self.rows = mandolin(self.tiles, self.num_cols)
         if self.snake:
@@ -370,6 +370,7 @@ class Mosaic(object):
         # handle row-column pairs or column-row pairs joined by an "x."
         temp = {}
         cols = []
+        e = None
         for tile in tiles:
             key = tile.replace(starts, '', 1).replace(ends, '', 1)
             try:
@@ -380,8 +381,15 @@ class Mosaic(object):
                 cols.append(int(x))
                 i = key
             except ValueError:
-                i = int(key)
+                try:
+                    i = int(key)
+                except Value Error:
+                    e = ('Warning: Non-numeric iterator found.'
+                         ' You may want to check that there are'
+                         ' no extra tiles in the source folder.')
             temp[i] = tile
+        if e:
+            print fill(e, subsequent_indent=' ')
         if len(cols):
             try:
                 self.num_cols
