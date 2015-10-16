@@ -383,7 +383,7 @@ class Mosaic(object):
             except ValueError:
                 try:
                     i = int(key)
-                except Value Error:
+                except ValueError:
                     e = ('Warning: Non-numeric iterator found.'
                          ' You may want to check that there are'
                          ' no extra tiles in the source folder.')
