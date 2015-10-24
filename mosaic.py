@@ -204,6 +204,7 @@ class Mosaic(object):
 
     def create_mosaic(self, path=None, label=True):
         """Create a mosaic from a set a tiles with known, fixed offsets"""
+        #FIXME Adapt to use a coordinate file
         start_time = datetime.now()
         # Folder-specific parameters are cleared when the mosaic is
         # done stitching, but most parameters carry over, allowing a
@@ -328,6 +329,12 @@ class Mosaic(object):
         except OSError:
             pass
         return self
+
+
+
+
+    def opencv_mosaic(self):
+        pass
 
 
 
@@ -464,6 +471,219 @@ class Mosaic(object):
         print 'Tile set was patched!'
         return tiles
 
+
+
+
+    def cv_offset(img1, img2):
+        print 'Matching features in {1} and {0}'.format(img1, img2)
+
+        if not bool(img1) or not bool(img2):
+            return -1, (0,0)
+
+        # Read descriptors
+        kp1, des1 = keypoints[img1]
+        kp2, des2 = keypoints[img2]
+
+        if not (any(kp1) and np.any(des1)):
+            return -1, (0,0)
+        if not (any(kp2) and np.any(des2)):
+            return -1, (0,0)
+
+        # FLANN parameters
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+        search_params = dict(checks=50)   # or pass empty dictionary
+
+        flann = cv2.FlannBasedMatcher(index_params,search_params)
+
+        try:
+            matches = flann.knnMatch(des1, des2, k=2)
+        except cv2.error:
+            return -1, (0,0)
+
+        # Matches consist of DMatch objects, which among other things contain
+        # coordinates for keypoints in kp1 and kp2. These can be used to calculate
+        # an average offset between two tiles. For a large number of tiles, the
+        # median should suffice as an estimate of average offset. This will be
+        # slooooooooow for large tilesets, so it will probably make sense to store
+        # the offsets in case things go south.
+
+        # How to handle featureless tiles? Apply average offset for row and column.
+
+        # Ratio test as per Lowe's paper
+        x = []
+        y = []
+        for i,(m,n) in enumerate(matches):
+            if m.distance < 0.6 * n.distance:
+                c1 = m.queryIdx
+                c2 = m.trainIdx
+                x.append(kp1[c1].pt[0] - kp2[c2].pt[0])
+                y.append(kp1[c1].pt[1] - kp2[c2].pt[1])
+        if len(x) and len(y):
+            groups = cluster(x, 2)
+            _max = max([len(group) for group in groups])
+            group = [group for group in groups if len(group)==_max][0]
+            x_avg = sum(group) / len(group)
+            groups = cluster(y, 2)
+            _max = max([len(group) for group in groups])
+            group = [group for group in groups if len(group)==_max][0]
+            y_avg = sum(group) / len(group)
+            return len(x), (x_avg, y_avg)
+        return -1, (0,0)
+
+
+
+    def cv_mosaic(self):
+        """Automatically determine offsets using opencv"""
+        # Get keypoints
+        sift = cv2.xfeatures2d.SIFT_create()
+        keypoints = {}
+        for tile in sorted(tiles):
+            print 'Getting keypoints for {}'.format(tile)
+            keypoints[tile] = sift.detectAndCompute(cv2.imread(tile, 0), None)
+
+        # Split tiles into rows
+        rows = mandolin(sorted(tiles), 20)
+        rows = [rows[i] if not i % 2 else rows[i][::-1] for i in xrange(0, len(rows))]
+
+        w = 1280
+        h = 960
+
+        # Determine offsets
+        offsets = {}
+        n_row = 0
+        #n_row = len(rows)
+        while n_row < len(rows):
+            #print '-' * 80 + '\nROW {}'.format(n_row) + '\n' + '-' * 80
+
+            within_row = {}
+            between_rows = {}
+            keys = []
+
+            row = rows[n_row]
+            n_col = 0
+            while n_col < len(row):
+                tile = row[n_col]
+                keys.append(tile)
+                #print '\nColumn {}\n{}'.format(n_col, '-' * (7 + len(str(n_col))))
+                if n_col:
+                    within_row[tile] = get_offset(tile, row[n_col-1])
+                else:
+                    within_row[tile] = (-1, (0,0))
+                if n_row:
+                    between_rows[tile] = get_offset(tile, rows[n_row-1][n_col])
+                else:
+                    between_rows[tile] = (-1, (0,0))
+                n_col += 1
+
+            # Calculate within-row offset
+            try:
+                mx = max([offset[0] for offset in within_row.values()])
+            except:
+                offset1 = (0,0)
+            else:
+                offset1 = [offset[1] for offset in within_row.values()
+                           if offset[0] == mx][0]
+                offset1 = (-(offset1[0]+w), offset1[1])
+
+            # Calculate between-row offset
+            try:
+                mx = max([offset[0] for offset in between_rows.values()])
+            except:
+                offset2 = (0,0)
+            else:
+                offset2 = [offset[1] for offset in between_rows.values()
+                           if offset[0] == mx][0]
+                offset2 = (-offset2[0], -(offset2[1]+h))
+
+            # Adjust between row offset
+            offset = []
+            for key in keys:
+                offsets[key] = (offset1, offset2)
+
+            n_row += 1
+
+        coordinates = {}
+        n_row = 0
+        for row in rows:
+            n_col = 0
+            while n_col < len(row):
+                tile = rows[n_row][n_col]
+                wr, br = offsets[tile]
+                wrx, wry = wr
+                brx, bry = br
+                if not n_row and not n_col:
+                    coordinates[tile] = (0,0)
+                elif not n_col:
+                    neighbor = coordinates[rows[n_row-1][n_col]]
+                    x = neighbor[0] + brx
+                    y = neighbor[1] + h + bry
+                    coordinates[tile] = (x,y)
+                else:
+                    neighbor = coordinates[rows[n_row][n_col-1]]
+                    x = neighbor[0] + w + wrx
+                    y = neighbor[1] + wry
+                    coordinates[tile] = (x,y)
+                n_col += 1
+            n_row += 1
+        # Calculate mosaic dimensions
+        x_min = min([coordinate[0] for coordinate in coordinates.values()])
+        x_max = max([coordinate[0] for coordinate in coordinates.values()]) + w
+        y_min = min([coordinate[1] for coordinate in coordinates.values()])
+        y_max = max([coordinate[1] for coordinate in coordinates.values()]) + h
+
+        # Shift everything so that minimum coordinates are 0,0
+        for tile in coordinates:
+            x, y = coordinates[tile]
+            coordinates[tile] = x - x_min, y - y_min
+
+        # Identify outliers
+        #groups = cluster([coordinate[0] for coordinate in coordinates.values()], 5)
+        #largest = max([len(group) for group in groups])
+
+        mosaic_width = int(x_max - x_min)
+        mosaic_height = int(y_max - y_min)
+
+        # Place tiles
+        mosaic = Image.new('RGB', (mosaic_width, mosaic_height), (255,255,255))
+        print 'Stitching mosaic...'
+        # Now that the canvas has been created, we can paste the
+        # individual tiles on top of it. Coordinates increase from
+        # (0,0) in the top left corner.
+        n_row = 0  # index of row
+        for row in rows:
+            n_col = 0  # index of column
+            for fp in row:
+                if bool(fp):
+                    x, y = [int(n) for n in coordinates[fp]]
+                    # Encode the name
+                    try:
+                        mosaic.paste(Image.open(fp.encode('cp1252')), (x, y))
+                    except:
+                        print ('Encountered unreadable tiles but'
+                               ' could not fix them. Try installing'
+                               ' ImageMagick and re-running this'
+                               ' script.')
+                n_col += 1
+            n_row += 1
+        mosaic.save('mosaic.tif', 'TIFF')
+
+
+
+
+def cluster(data, maxgap):
+    '''Arrange data into groups where successive elements
+       differ by no more than *maxgap*
+       From http://stackoverflow.com/questions/14783947
+    '''
+    data.sort()
+    groups = [[data[0]]]
+    for x in data[1:]:
+        if abs(x - groups[-1][-1]) <= maxgap:
+            groups[-1].append(x)
+        else:
+            groups.append([x])
+    return groups
 
 
 
