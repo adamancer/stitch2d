@@ -8,10 +8,14 @@ import sys
 import time
 import Tkinter
 import tkFileDialog
+import cPickle as pickle
 from copy import copy
 from datetime import datetime
-from PIL import Image, ImageDraw, ImageFont
 from textwrap import fill
+
+import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 from ..helpers import prompt
 from .offset import OffsetEngine
@@ -33,7 +37,7 @@ class Counter(dict):
 class Mosaic(object):
 
 
-    def __init__(self, path, jpeg=False, skipped=None):
+    def __init__(self, path, opencv=False, jpeg=False, skipped=None):
         # Properties of the Mosaic object:
         #  self.filename (str, specific)
         #  self.name (str, specific)
@@ -61,15 +65,27 @@ class Mosaic(object):
         }
         self.basepath = os.path.dirname(__file__)
         self.image_types = {}
-        with open(os.path.join(self.basepath, 'files', 'image_types.txt')) as f:
+        with open(os.path.join(self.basepath,
+                               'files', 'image_types.txt')) as f:
             rows = csv.reader(f, delimiter=',', quotechar='"')
             self.image_types = dict([(row[0].lower(), row[1])
                                       for row in rows if bool(row[0])
                                       and not row[0].startswith('#')])
         self.skipped = skipped
-        self.workaround = False  # tracks TIFF reading nightmare
+        self.opencv = opencv
+        # Check for job parameters
         self.get_tile_parameters(path)
-        self.set_mosaic_parameters()
+        try:
+            f = open('params.p')
+        except:
+            self.set_mosaic_parameters()
+        else:
+            print 'Found parameters file'
+            params = pickle.load(f)
+            self.coordinates = params['coordinates']
+            self.mag = params['mag']
+            self.num_cols = params['num_cols']
+            self.snake = params['snake']
 
 
 
@@ -77,62 +93,43 @@ class Mosaic(object):
     def get_tile_parameters(self, path):
         """Determine parameters for tiles in path"""
         self.path = path
+        # Test images
+        files = glob.glob(os.path.join(path, '*.tif'))
+        fp = files[0]
         try:
-            self.ext
-            self.w
-            self.h
-        except AttributeError:
-            # Tile parameters not set, so we'll assign them now
-            print 'Getting tile parameters...'
-            exts = Counter()
-            dims = Counter()
-            tiles = []
-            while True:
-                for fn in os.listdir(path):
-                    fp = os.path.join(path, fn)
-                    try:
-                        img = Image.open(fp)
-                    except:
-                        # This is a clumsy solution to PIL's unreliability
-                        # reading TIFFs. It uses ImageMagick to copy
-                        # the unreadable tiles to a subdirectory; the
-                        # IM-created tiles should always be readable by PIL.
-                        ext = os.path.splitext(fp)[1].lower()
-                        if ext in self.extmap:
-                            self.workaround = mogrify(path, ext)
-                            if self.workaround:
-                                path = os.path.join(path, 'working')
-                                break
-                            else:
-                                print ('Encountered unreadable tiles but'
-                                       ' could not fix them. Try installing'
-                                       ' ImageMagick and re-running this'
-                                       ' script.')
-                                raise
-                    else:
-                        exts.add(os.path.splitext(fn)[1])
-                        dims.add('x'.join([str(x) for x in img.size]))
-                        tiles.append(fp.encode('latin1').decode('latin1'))
+            img = Image.open(fp)
+        except:
+            # This is a clumsy solution to PIL's unreliability
+            # reading TIFFs. It uses ImageMagick to copy
+            # the unreadable tiles to a subdirectory; the
+            # IM-created tiles should always be readable by PIL.
+            ext = os.path.splitext(fp)[1].lower()
+            if ext in self.extmap:
+                if mogrify(path, ext):
+                    path = os.path.join(path, 'working')
+                    img = Image.open(os.path.join(path, os.listdir(path)[0]))
                 else:
-                    self.ext = [key for key in exts
-                                if exts[key] == max(exts.values())][0].lower()
-                    dim = [key for key in dims
-                           if dims[key] == max(dims.values())][0]
-                    self.w, self.h = [int(x) for x in dim.split('x')]
-                    break
+                    print ('Encountered unreadable tiles but could'
+                           ' not fix them. Try installing ImageMagick'
+                           ' and re-running this script.')
+        self.ext = os.path.splitext(fp)[1]
+        self.w, self.h = img.size
+
+        tiles = glob.glob(os.path.join(path, '*' + self.ext))
+        tiles = [fp.encode('latin1').decode('latin1') for fp in tiles]
+        self.handle_tiles(tiles)
+
+        # Mandolin tileset if using saved parameters
+        try:
+            self.rows = mandolin(self.tiles, self.num_cols)
+        except AttributeError:
+            pass
         else:
-            print 'Using tile parameters from the last mosaic'
-            tiles = [fp.encode('latin1').decode('latin1')
-                     for fp in glob.glob(os.path.join(path, '*' + self.ext))]
-            try:
-                Image.open(tiles[0])
-            except:
-                self.workaround = mogrify(path, self.ext)
-                path = os.path.join(path, 'working')
-                tiles = [fp.encode('latin1').decode('latin1') for fp
-                         in glob.glob(os.path.join(path, '*' + self.ext))]
-        if self.workaround:
+            self.num_rows = len(self.rows)
+
+        if path.strip('/').endswith('working'):
             path = os.path.split(path)[0]
+
         # Get name
         self.filename = unicode(os.path.basename(path))
         try:
@@ -144,8 +141,7 @@ class Mosaic(object):
         except KeyError:
             # Suffix was not recognized
             pass
-        tiles = [tile for tile in tiles if tile.endswith(self.ext)]
-        self.handle_tiles(tiles)
+
         return self
 
 
@@ -163,37 +159,54 @@ class Mosaic(object):
         else:
             print (' Number of columns: {} (determined from'
                    ' filenames)').format(self.num_cols)
+        self.rows = mandolin(self.tiles, self.num_cols)
+        self.num_rows = len(self.rows)
         self.mag = prompt(' Magnification:', '\d+')
         self.mag = float(self.mag)
         self.snake = prompt(' Snake pattern?', yes_no)
-        self.rows = mandolin(self.tiles, self.num_cols)
         if self.snake:
-            for i in [i for i in xrange(0, len(self.rows)) if i % 2]:
-                self.rows[i]= self.rows[i][::-1]
-        self.num_rows = len(self.rows)
-        print 'Setting offset...'
-        engine = OffsetEngine(self.rows, True)
-        offset = engine.set_offset()
-        engine = OffsetEngine(self.rows, False, offset)
-        offset = engine.set_offset()
-        self.x_offset_within_row = offset[0]
-        self.y_offset_within_row = offset[1]
-        self.x_offset_between_rows = offset[2]
-        self.y_offset_between_rows = offset[3]
+            self.rows = [self.rows[i] if not i % 2 else self.rows[i][::-1]
+                         for i in xrange(0, len(self.rows))]
+        # Determine offsets
+        if self.opencv:
+            print 'Determining offset...'
+            self.coordinates = self.cv_coordinates()
+        else:
+            print 'Setting offset...'
+            self.coordinates = self.set_coordinates()
         # Review parameters
         print 'Review parameters for your mosaic:'
         print ' Dimensions:         ', '{}x{}'.format(self.num_cols,
-                                                    self.num_rows)
+                                                      self.num_rows)
         print ' Magnification:      ', self.mag
-        print ' Offset within row:  ', '{}x{}'.format(
-                    self.x_offset_within_row,
-                    self.y_offset_within_row)
-        print ' Offset between rows:', '{}x{}'.format(
-                    self.x_offset_between_rows,
-                    self.y_offset_between_rows)
         print ' Snake:              ', self.snake
         print ' Create JPEG:        ', self.jpeg
         if prompt('Do these parameters look good?', yes_no):
+            # Write job parameters to file. This could be embedded in
+            # the metadata.
+            params = [
+                self.filename,
+                '-' * len(self.filename),
+                'Dimensions: {}x{}'.format(self.num_cols, self.num_rows),
+                'Magnification: {}'.format(self.mag),
+                'Snake: {}'.format(self.snake),
+                '',
+                'Tile coordinates:'
+            ]
+            for key in sorted(self.coordinates.keys()):
+                params.append('{}: {}'.format(key, self.coordinates[key]))
+            fp = os.path.join(self.path, os.pardir, self.filename + '.txt')
+            with open(fp, 'wb') as f:
+                f.write('\n'.join(params))
+            # Pickle key parameters for re-use later
+            params = {
+                'coordinates' : self.coordinates,
+                'mag' : self.mag,
+                'num_cols' : self.num_cols,
+                'snake' : self.snake
+            }
+            with open('params.p', 'wb') as f:
+                pickle.dump(params, f)
             return self
         else:
             del self.num_cols
@@ -202,67 +215,258 @@ class Mosaic(object):
 
 
 
-    def create_mosaic(self, path=None, label=True):
-        """Create a mosaic from a set a tiles with known, fixed offsets"""
-        #FIXME Adapt to use a coordinate file
-        start_time = datetime.now()
-        # Folder-specific parameters are cleared when the mosaic is
-        # done stitching, but most parameters carry over, allowing a
-        # bunch of mosaics to be run at once with the same settings.
-        if path:
-            self.get_tile_parameters(path)
-            self.rows = mandolin(self.tiles, self.num_cols)
-            if self.snake:
-                for i in [i for i in xrange(0, len(self.rows)) if i % 2]:
-                    self.rows[i]= self.rows[i][::-1]
-            self.num_rows = len(self.rows)
-        # The dimensions of the mosaic are determined by the
-        # tile dimensions minus the offsets between rows and
-        # columns. Some general notes:
-        #   * The origin is in the upper left
-        #   * Offsets are always applied as n - 1 because they occur
-        #     between tiles
-        mosaic_width = (self.w * self.num_cols +
-                        self.x_offset_within_row * (self.num_cols - 1) +
-                        abs(self.x_offset_between_rows) * (self.num_rows - 1))
-        mosaic_height = (self.h * self.num_rows +
-                         self.y_offset_between_rows * (self.num_rows - 1) +
-                         abs(self.y_offset_within_row) * (self.num_cols - 1))
-        if label:
-            label_height = int(mosaic_height * 0.04)
-            mosaic_height += label_height
-        print 'Mosaic will be {:,} by {:,} pixels'.format(mosaic_width,
-                                                          mosaic_height)
-        mosaic = Image.new('RGB', (mosaic_width, mosaic_height), (255,255,255))
-        print 'Stitching mosaic...'
-        # Now that the canvas has been created, we can paste the
-        # individual tiles on top of it. Coordinates increase from
-        # (0,0) in the top left corner.
+    def set_coordinates(self):
+        """Set coordinates using user-defined offsets"""
+        # Use the offset engine to allow users to set the offsets
+        engine = OffsetEngine(self.rows, True)
+        offset = engine.set_offset()
+        engine = OffsetEngine(self.rows, False, offset)
+        offset = engine.set_offset()
+
+        x_offset_within_row = offset[0]
+        y_offset_within_row = offset[1]
+        x_offset_between_rows = offset[2]
+        y_offset_between_rows = offset[3]
+
+        coordinates = {}
         n_row = 0  # index of row
         for row in self.rows:
             n_col = 0  # index of column
             for fp in row:
                 if bool(fp):
                     # Calculate x coordinate
-                    x = ((self.w + self.x_offset_within_row) * n_col +
-                         self.x_offset_between_rows * n_row)
-                    if self.x_offset_between_rows < 0:
-                        x -= self.x_offset_between_rows * (self.num_rows - 1)
+                    x = ((self.w + x_offset_within_row) * n_col +
+                         x_offset_between_rows * n_row)
+                    if x_offset_between_rows < 0:
+                        x -= x_offset_between_rows * (self.num_rows - 1)
                     # Calculate y coordinate
-                    y = ((self.h + self.y_offset_between_rows) * n_row +
-                         self.y_offset_within_row * n_col)
-                    if self.y_offset_within_row < 0:
-                        y -= self.y_offset_within_row * (self.num_cols - 1)
-                    # Encode the name
-                    try:
-                        mosaic.paste(Image.open(fp.encode('cp1252')), (x, y))
-                    except:
-                        print ('Encountered unreadable tiles but'
-                               ' could not fix them. Try installing'
-                               ' ImageMagick and re-running this'
-                               ' script.')
+                    y = ((self.h + y_offset_between_rows) * n_row +
+                         y_offset_within_row * n_col)
+                    if y_offset_within_row < 0:
+                        y -= y_offset_within_row * (self.num_cols - 1)
+                    coordinates[fp] = (x, y)
                 n_col += 1
             n_row += 1
+        return self.clean_coordinates(coordinates)
+
+
+
+
+    def cv_coordinates(self):
+        """Automatically determine offsets using opencv"""
+        self.sift = cv2.xfeatures2d.SIFT_create()
+        self.keypoints = {}
+        offsets = {}
+
+        # Reliability test
+        #  1. Are there a large number of matches?
+        #  2. Are most of those matches part of the same cluster?
+        #  3. Is the within-row or between-row offset more reliable?
+
+        n_row = 0
+        while n_row < len(self.rows):
+            within_row = {}
+            between_rows = {}
+            keys = []
+            row = self.rows[n_row]
+            n_col = 0
+            while n_col < len(row):
+                tile = row[n_col]
+                keys.append(tile)
+                if n_col:
+                    neighbor = row[n_col-1]
+                    within_row[tile] = self.cv_offset(tile, neighbor)
+                else:
+                    within_row[tile] = (-1, (0,0))
+                if n_row:
+                    neighbor = self.rows[n_row-1][n_col]
+                    between_rows[tile] = self.cv_offset(tile, neighbor)
+                else:
+                    between_rows[tile] = (-1, (0,0))
+                n_col += 1
+
+            # Find best within-row offset
+            try:
+                mx = max([offset[0] for offset in within_row.values()])
+            except:
+                offset1 = (0,0)
+            else:
+                offset1 = [offset[1] for offset in within_row.values()
+                           if offset[0] == mx][0]
+                offset1 = (-(offset1[0] + self.w), -offset1[1])
+
+            # Find best between-row offset
+            try:
+                mx = max([offset[0] for offset in between_rows.values()])
+            except:
+                offset2 = (0,0)
+            else:
+                offset2 = [offset[1] for offset in between_rows.values()
+                           if offset[0] == mx][0]
+                offset2 = (-offset2[0], -(offset2[1] + self.h))
+
+            # Adjust between row offset
+            offset = []
+            for key in keys:
+                offsets[key] = (offset1, offset2)
+            n_row += 1
+
+        # Get coordinates
+        coordinates = {}
+        n_row = 0
+        for row in self.rows:
+            n_col = 0
+            while n_col < len(row):
+                tile = self.rows[n_row][n_col]
+                wr, br = offsets[tile]
+                wrx, wry = wr  # within-row offset
+                brx, bry = br  # between-row offset
+                if not n_row and not n_col:
+                    coordinates[tile] = (0, 0)
+                elif not n_col:
+                    # Apply between-row offset to first tile in row
+                    neighbor = coordinates[self.rows[n_row-1][n_col]]
+                    x = neighbor[0] + brx
+                    y = neighbor[1] + self.h + bry
+                    coordinates[tile] = (x, y)
+                else:
+                    # Apply within-row offset to subsequent tiles in row
+                    neighbor = coordinates[self.rows[n_row][n_col-1]]
+                    x = neighbor[0] + self.w + wrx
+                    y = neighbor[1] + wry
+                    coordinates[tile] = (x, y)
+                n_col += 1
+            n_row += 1
+
+        return self.clean_coordinates(coordinates)
+
+
+
+
+    def cv_offset(self, img1, img2):
+
+        # Read descriptors
+        for fp in (img2, img1):
+            if not bool(fp):
+                return -1, (0, 0)
+            try:
+                self.keypoints[fp]
+            except:
+                print 'Getting keypoints for {}'.format(fp)
+                img = cv2.imread(fp, 0)
+                self.keypoints[fp] = self.sift.detectAndCompute(img, None)
+
+        kp1, des1 = self.keypoints[img1]
+        if not (any(kp1) and np.any(des1)):
+            print 'No keypoints found in {}'.format(img1)
+            return -1, (0,0)
+
+        kp2, des2 = self.keypoints[img2]
+        if not (any(kp2) and np.any(des2)):
+            print 'No keypoints found in {}'.format(img2)
+            return -1, (0,0)
+
+        print 'Matching features in {1} and {0}'.format(img1, img2)
+        # FLANN parameters
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+        search_params = dict(checks=50)
+        flann = cv2.FlannBasedMatcher(index_params,search_params)
+        try:
+            matches = flann.knnMatch(des1, des2, k=2)
+        except cv2.error:
+            print 'No matches found in {1} and {0}'.format(img1, img2)
+            return -1, (0,0)
+
+        # Matches consist of DMatch objects, which among other things
+        # contain coordinates for keypoints in kp1 and kp2. These can
+        # be used to calculate an average offset between two tiles;
+        # the average is based on a simple cluster analysis of matches
+        # detected between the two images.
+
+        # Ratio test as per Lowe's paper
+        x = []
+        y = []
+        for i,(m,n) in enumerate(matches):
+            if m.distance < 0.7 * n.distance:
+                c1 = m.queryIdx
+                c2 = m.trainIdx
+                x.append(kp1[c1].pt[0] - kp2[c2].pt[0])
+                y.append(kp1[c1].pt[1] - kp2[c2].pt[1])
+        if len(x) and len(y):
+            # Return the largest clusters for x and y
+            groups = cluster(x, 2)
+            x_max = max([len(group) for group in groups])
+            group = [group for group in groups if len(group)==x_max][0]
+            x_avg = sum(group) / len(group)
+
+            groups = cluster(y, 2)
+            y_max = max([len(group) for group in groups])
+            group = [group for group in groups if len(group)==y_max][0]
+            y_avg = sum(group) / len(group)
+
+            # Log values
+            with open('offsets.csv', 'ab') as f:
+                writer = csv.writer(f, delimiter='\t')
+                writer.writerow([img2, x_avg, x_max, len(x)])
+                writer.writerow([img2, y_avg, y_max, len(y)])
+
+            # Return total matches, average offsets, and group sizes
+            return len(x), (x_avg, y_avg), (x_max, y_max)
+        return -1, (0,0)
+
+
+
+
+    def clean_coordinates(self, coordinates):
+        x_min = min([coordinate[0] for coordinate in coordinates.values()])
+        x_max = max([coordinate[0] for coordinate in coordinates.values()])
+        y_min = min([coordinate[1] for coordinate in coordinates.values()])
+        y_max = max([coordinate[1] for coordinate in coordinates.values()])
+
+        # Shift everything so that minimum coordinates are 0,0
+        for tile in coordinates:
+            x, y = coordinates[tile]
+            coordinates[tile] = int(x - x_min), int(y - y_min)
+
+        return coordinates
+
+
+
+
+    def create_mosaic(self, path=None, label=True):
+        """Create a mosaic from a set a tiles"""
+        start_time = datetime.now()
+
+        # Normalize coordinates and calculate dimensions. The
+        # dimensions of the mosaic are determined by the tile
+        # dimensions minus the offsets between rows and columns
+        # Some general notes:
+        #  * Coordinates increase from (0,0) in the top left corner
+        #  * Offsets are always applied as n - 1 because they occur
+        #    between tiles.
+        mosaic_width = max([coordinate[0] for coordinate in
+                            self.coordinates.values()]) + self.w
+        mosaic_height = max([coordinate[1] for coordinate in
+                             self.coordinates.values()]) + self.h
+        if label:
+            label_height = int(mosaic_height * 0.04)
+            mosaic_height += label_height
+        print 'Mosaic will be {:,} by {:,} pixels'.format(mosaic_width,
+                                                          mosaic_height)
+        # Create the mosaic
+        print 'Stitching mosaic...'
+        mosaic = Image.new('RGB', (mosaic_width, mosaic_height), (255,255,255))
+        for fp in self.coordinates:
+            x, y = self.coordinates[fp]
+            # Encode the name
+            try:
+                mosaic.paste(Image.open(fp.encode('cp1252')), (x, y))
+            except:
+                print ('Encountered unreadable tiles but'
+                       ' could not fix them. Try installing'
+                       ' ImageMagick and re-running this'
+                       ' script.')
         # Add label
         if label:
             ttf = os.path.join(self.basepath, 'files', 'OpenSans-Regular.ttf')
@@ -294,26 +498,6 @@ class Mosaic(object):
                 pass
             mosaic.save(fp, 'JPEG')
         print 'Mosaic complete! (t={})'.format(datetime.now() - start_time)
-        # Write job parameters to file. This could be embedded in
-        # the metadata.
-        params = [
-            self.filename,
-            '-' * len(self.filename),
-            'Dimensions: {}x{}'.format(self.num_cols, self.num_rows),
-            'Offset within row: {}x{}'.format(self.x_offset_within_row,
-                                              self.y_offset_within_row),
-            'Offset between rows: {}x{}'.format(self.x_offset_between_rows,
-                                                self.y_offset_between_rows),
-            'Magnification: {}'.format(self.mag),
-            'Snake: {}'.format(self.snake),
-            '',
-            #('Mosaic created using'
-            #  ' MinSci Toolkit {}').format(minsci.__version__),
-            #''
-        ]
-        fp = os.path.join(self.path, os.pardir, self.filename + '.txt')
-        with open(fp, 'wb') as f:
-            f.write('\n'.join(params))
         # Clear folder-specific parameters. This isn't crucial--these
         # values should be overwritten by future uses of the same Mosaic
         # instance.
@@ -329,12 +513,6 @@ class Mosaic(object):
         except OSError:
             pass
         return self
-
-
-
-
-    def opencv_mosaic(self):
-        pass
 
 
 
@@ -474,203 +652,6 @@ class Mosaic(object):
 
 
 
-    def cv_offset(img1, img2):
-        print 'Matching features in {1} and {0}'.format(img1, img2)
-
-        if not bool(img1) or not bool(img2):
-            return -1, (0,0)
-
-        # Read descriptors
-        kp1, des1 = keypoints[img1]
-        kp2, des2 = keypoints[img2]
-
-        if not (any(kp1) and np.any(des1)):
-            return -1, (0,0)
-        if not (any(kp2) and np.any(des2)):
-            return -1, (0,0)
-
-        # FLANN parameters
-        FLANN_INDEX_KDTREE = 0
-        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-        search_params = dict(checks=50)   # or pass empty dictionary
-
-        flann = cv2.FlannBasedMatcher(index_params,search_params)
-
-        try:
-            matches = flann.knnMatch(des1, des2, k=2)
-        except cv2.error:
-            return -1, (0,0)
-
-        # Matches consist of DMatch objects, which among other things contain
-        # coordinates for keypoints in kp1 and kp2. These can be used to calculate
-        # an average offset between two tiles. For a large number of tiles, the
-        # median should suffice as an estimate of average offset. This will be
-        # slooooooooow for large tilesets, so it will probably make sense to store
-        # the offsets in case things go south.
-
-        # How to handle featureless tiles? Apply average offset for row and column.
-
-        # Ratio test as per Lowe's paper
-        x = []
-        y = []
-        for i,(m,n) in enumerate(matches):
-            if m.distance < 0.6 * n.distance:
-                c1 = m.queryIdx
-                c2 = m.trainIdx
-                x.append(kp1[c1].pt[0] - kp2[c2].pt[0])
-                y.append(kp1[c1].pt[1] - kp2[c2].pt[1])
-        if len(x) and len(y):
-            groups = cluster(x, 2)
-            _max = max([len(group) for group in groups])
-            group = [group for group in groups if len(group)==_max][0]
-            x_avg = sum(group) / len(group)
-            groups = cluster(y, 2)
-            _max = max([len(group) for group in groups])
-            group = [group for group in groups if len(group)==_max][0]
-            y_avg = sum(group) / len(group)
-            return len(x), (x_avg, y_avg)
-        return -1, (0,0)
-
-
-
-    def cv_mosaic(self):
-        """Automatically determine offsets using opencv"""
-        # Get keypoints
-        sift = cv2.xfeatures2d.SIFT_create()
-        keypoints = {}
-        for tile in sorted(tiles):
-            print 'Getting keypoints for {}'.format(tile)
-            keypoints[tile] = sift.detectAndCompute(cv2.imread(tile, 0), None)
-
-        # Split tiles into rows
-        rows = mandolin(sorted(tiles), 20)
-        rows = [rows[i] if not i % 2 else rows[i][::-1] for i in xrange(0, len(rows))]
-
-        w = 1280
-        h = 960
-
-        # Determine offsets
-        offsets = {}
-        n_row = 0
-        #n_row = len(rows)
-        while n_row < len(rows):
-            #print '-' * 80 + '\nROW {}'.format(n_row) + '\n' + '-' * 80
-
-            within_row = {}
-            between_rows = {}
-            keys = []
-
-            row = rows[n_row]
-            n_col = 0
-            while n_col < len(row):
-                tile = row[n_col]
-                keys.append(tile)
-                #print '\nColumn {}\n{}'.format(n_col, '-' * (7 + len(str(n_col))))
-                if n_col:
-                    within_row[tile] = get_offset(tile, row[n_col-1])
-                else:
-                    within_row[tile] = (-1, (0,0))
-                if n_row:
-                    between_rows[tile] = get_offset(tile, rows[n_row-1][n_col])
-                else:
-                    between_rows[tile] = (-1, (0,0))
-                n_col += 1
-
-            # Calculate within-row offset
-            try:
-                mx = max([offset[0] for offset in within_row.values()])
-            except:
-                offset1 = (0,0)
-            else:
-                offset1 = [offset[1] for offset in within_row.values()
-                           if offset[0] == mx][0]
-                offset1 = (-(offset1[0]+w), offset1[1])
-
-            # Calculate between-row offset
-            try:
-                mx = max([offset[0] for offset in between_rows.values()])
-            except:
-                offset2 = (0,0)
-            else:
-                offset2 = [offset[1] for offset in between_rows.values()
-                           if offset[0] == mx][0]
-                offset2 = (-offset2[0], -(offset2[1]+h))
-
-            # Adjust between row offset
-            offset = []
-            for key in keys:
-                offsets[key] = (offset1, offset2)
-
-            n_row += 1
-
-        coordinates = {}
-        n_row = 0
-        for row in rows:
-            n_col = 0
-            while n_col < len(row):
-                tile = rows[n_row][n_col]
-                wr, br = offsets[tile]
-                wrx, wry = wr
-                brx, bry = br
-                if not n_row and not n_col:
-                    coordinates[tile] = (0,0)
-                elif not n_col:
-                    neighbor = coordinates[rows[n_row-1][n_col]]
-                    x = neighbor[0] + brx
-                    y = neighbor[1] + h + bry
-                    coordinates[tile] = (x,y)
-                else:
-                    neighbor = coordinates[rows[n_row][n_col-1]]
-                    x = neighbor[0] + w + wrx
-                    y = neighbor[1] + wry
-                    coordinates[tile] = (x,y)
-                n_col += 1
-            n_row += 1
-        # Calculate mosaic dimensions
-        x_min = min([coordinate[0] for coordinate in coordinates.values()])
-        x_max = max([coordinate[0] for coordinate in coordinates.values()]) + w
-        y_min = min([coordinate[1] for coordinate in coordinates.values()])
-        y_max = max([coordinate[1] for coordinate in coordinates.values()]) + h
-
-        # Shift everything so that minimum coordinates are 0,0
-        for tile in coordinates:
-            x, y = coordinates[tile]
-            coordinates[tile] = x - x_min, y - y_min
-
-        # Identify outliers
-        #groups = cluster([coordinate[0] for coordinate in coordinates.values()], 5)
-        #largest = max([len(group) for group in groups])
-
-        mosaic_width = int(x_max - x_min)
-        mosaic_height = int(y_max - y_min)
-
-        # Place tiles
-        mosaic = Image.new('RGB', (mosaic_width, mosaic_height), (255,255,255))
-        print 'Stitching mosaic...'
-        # Now that the canvas has been created, we can paste the
-        # individual tiles on top of it. Coordinates increase from
-        # (0,0) in the top left corner.
-        n_row = 0  # index of row
-        for row in rows:
-            n_col = 0  # index of column
-            for fp in row:
-                if bool(fp):
-                    x, y = [int(n) for n in coordinates[fp]]
-                    # Encode the name
-                    try:
-                        mosaic.paste(Image.open(fp.encode('cp1252')), (x, y))
-                    except:
-                        print ('Encountered unreadable tiles but'
-                               ' could not fix them. Try installing'
-                               ' ImageMagick and re-running this'
-                               ' script.')
-                n_col += 1
-            n_row += 1
-        mosaic.save('mosaic.tif', 'TIFF')
-
-
-
-
 def cluster(data, maxgap):
     '''Arrange data into groups where successive elements
        differ by no more than *maxgap*
@@ -688,7 +669,7 @@ def cluster(data, maxgap):
 
 
 
-def mosey(path=None, jpeg=False, skipped=None):
+def mosey(path=None, opencv=False, jpeg=False, skipped=None):
     """Helper function for stitching a set of directories all at once"""
     if not path:
         root = Tkinter.Tk()
@@ -728,10 +709,12 @@ def mosey(path=None, jpeg=False, skipped=None):
                    ' from {}'.format(skiplists.pop(0)), subsequent_indent=' ')
     for path in tilesets:
         print 'New tileset: {}'.format(os.path.basename(path))
-        try:
-            mosaic.create_mosaic(path)
-        except NameError:
-            mosaic = Mosaic(path, jpeg, skipped).create_mosaic()
+        Mosaic(path, opencv, jpeg, skipped).create_mosaic()
+    # Remove parameters file
+    try:
+        os.remove('params.p')
+    except IOError:
+        pass
 
 
 
