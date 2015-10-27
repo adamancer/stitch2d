@@ -13,7 +13,10 @@ from copy import copy
 from datetime import datetime
 from textwrap import fill
 
-import cv2
+try:
+    import cv2
+except:
+    print 'mosaic.py: Could not find module cv2'
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -76,12 +79,11 @@ class Mosaic(object):
         # Check for job parameters
         self.get_tile_parameters(path)
         try:
-            f = open('params.p')
+            params = pickle.load(open('params.p', 'rb'))
         except:
             self.set_mosaic_parameters()
         else:
             print 'Found parameters file'
-            params = pickle.load(f)
             self.coordinates = params['coordinates']
             self.mag = params['mag']
             self.num_cols = params['num_cols']
@@ -162,18 +164,13 @@ class Mosaic(object):
         self.rows = mandolin(self.tiles, self.num_cols)
         self.num_rows = len(self.rows)
         self.mag = prompt(' Magnification:', '\d+')
+        #self.mag = 200
         self.mag = float(self.mag)
         self.snake = prompt(' Snake pattern?', yes_no)
+        #self.snake = False
         if self.snake:
             self.rows = [self.rows[i] if not i % 2 else self.rows[i][::-1]
                          for i in xrange(0, len(self.rows))]
-        # Determine offsets
-        if self.opencv:
-            print 'Determining offset...'
-            self.coordinates = self.cv_coordinates()
-        else:
-            print 'Setting offset...'
-            self.coordinates = self.set_coordinates()
         # Review parameters
         print 'Review parameters for your mosaic:'
         print ' Dimensions:         ', '{}x{}'.format(self.num_cols,
@@ -182,6 +179,13 @@ class Mosaic(object):
         print ' Snake:              ', self.snake
         print ' Create JPEG:        ', self.jpeg
         if prompt('Do these parameters look good?', yes_no):
+            # Determine offsets
+            if self.opencv:
+                print 'Determining offset...'
+                self.coordinates = self.cv_coordinates_3()
+            else:
+                print 'Setting offset...'
+                self.coordinates = self.set_coordinates()
             # Write job parameters to file. This could be embedded in
             # the metadata.
             params = [
@@ -252,121 +256,170 @@ class Mosaic(object):
 
 
 
+
     def cv_coordinates(self):
-        """Automatically determine offsets using opencv"""
-        self.sift = cv2.xfeatures2d.SIFT_create()
-        self.keypoints = {}
-        offsets = {}
+        try:
+            params = pickle.load(open('dev.p', 'rb'))
+        except:
+            self.sift = cv2.xfeatures2d.SIFT_create()
+            self.keypoints = {}
+            tiles = {}
+            n_row = 0
+            while n_row < len(self.rows):
+                row = self.rows[n_row]
+                n_col = 0
+                while n_col < len(row):
+                    tile = row[n_col]
+                    try:
+                        tiles[tile]
+                    except:
+                        tiles[tile] = {
+                            'position' : (n_col, n_row),
+                            'offsets' : [],
+                            'coordinates' : None
+                        }
+                    if n_col:
+                        neighbor = row[n_col-1]
+                        offset = self.cv_offset(tile, neighbor)
+                        if offset:
+                            xy, n_total, n_cluster = offset
+                            nxy = (xy[0]*-1, xy[1]*-1)
+                            score = self.cv_reliability(n_cluster, n_total)
+                            tiles[tile]['offsets'].append(['left', xy, score])
+                            tiles[neighbor]['offsets'].append(['right', nxy,
+                                                               score])
+                    if n_row:
+                        neighbor = self.rows[n_row-1][n_col]
+                        offset = self.cv_offset(tile, neighbor)
+                        if offset:
+                            xy, n_total, n_cluster = offset
+                            nxy = (xy[0]*-1, xy[1]*-1)
+                            score = self.cv_reliability(n_cluster, n_total)
+                            tiles[tile]['offsets'].append(['top', xy, score])
+                            tiles[neighbor]['offsets'].append(['down', nxy,
+                                                               score])
+                    n_col += 1
+                n_row += 1
+            # Pickle everything
+            print 'Pickling tiles'
+            params = tiles
+            with open('dev.p', 'wb') as f:
+                pickle.dump(params, f)
+        else:
+            print 'Found parameters file'
+            tiles = params
 
-        # Reliability test
-        #  1. Are there a large number of matches?
-        #  2. Are most of those matches part of the same cluster?
-        #  3. Is the within-row or between-row offset more reliable?
-
-        n_row = 0
-        while n_row < len(self.rows):
-            within_row = {}
-            between_rows = {}
-            keys = []
-            row = self.rows[n_row]
-            n_col = 0
-            while n_col < len(row):
-                tile = row[n_col]
-                keys.append(tile)
-                if n_col:
-                    neighbor = row[n_col-1]
-                    within_row[tile] = self.cv_offset(tile, neighbor)
-                else:
-                    within_row[tile] = (-1, (0,0))
-                if n_row:
-                    neighbor = self.rows[n_row-1][n_col]
-                    between_rows[tile] = self.cv_offset(tile, neighbor)
-                else:
-                    between_rows[tile] = (-1, (0,0))
-                n_col += 1
-
-            # Find best within-row offset
+        # Score feature matching between tiles and find a well-positioned tile
+        root = None
+        high_score = -1
+        for tile in sorted(tiles):
+            offsets = tiles[tile]['offsets']
             try:
-                mx = max([offset[0] for offset in within_row.values()])
+                score = sorted(offsets, key=lambda s:s[2]).pop()[2]
             except:
-                offset1 = (0,0)
+                pass
             else:
-                offset1 = [offset[1] for offset in within_row.values()
-                           if offset[0] == mx][0]
-                offset1 = (-(offset1[0] + self.w), -offset1[1])
+                if score > high_score:
+                    root = tile
+                    high_score = score
 
-            # Find best between-row offset
-            try:
-                mx = max([offset[0] for offset in between_rows.values()])
-            except:
-                offset2 = (0,0)
-            else:
-                offset2 = [offset[1] for offset in between_rows.values()
-                           if offset[0] == mx][0]
-                offset2 = (-offset2[0], -(offset2[1] + self.h))
-
-            # Adjust between row offset
-            offset = []
-            for key in keys:
-                offsets[key] = (offset1, offset2)
-            n_row += 1
-
-        # Get coordinates
-        coordinates = {}
-        n_row = 0
-        for row in self.rows:
-            n_col = 0
-            while n_col < len(row):
-                tile = self.rows[n_row][n_col]
-                wr, br = offsets[tile]
-                wrx, wry = wr  # within-row offset
-                brx, bry = br  # between-row offset
-                if not n_row and not n_col:
-                    coordinates[tile] = (0, 0)
-                elif not n_col:
-                    # Apply between-row offset to first tile in row
-                    neighbor = coordinates[self.rows[n_row-1][n_col]]
-                    x = neighbor[0] + brx
-                    y = neighbor[1] + self.h + bry
-                    coordinates[tile] = (x, y)
-                else:
-                    # Apply within-row offset to subsequent tiles in row
-                    neighbor = coordinates[self.rows[n_row][n_col-1]]
-                    x = neighbor[0] + self.w + wrx
-                    y = neighbor[1] + wry
-                    coordinates[tile] = (x, y)
-                n_col += 1
-            n_row += 1
+        # Place tiles relative to the root tile from above
+        coordinates = {root : (0,0)}
+        roots = [root]
+        while True:
+            neighbors = []
+            for root in roots:
+                print 'Finding neighbors for {}'.format(root)
+                try:
+                    tile = tiles[root]
+                except:
+                    continue
+                n_col, n_row = tile['position']
+                offsets = tile['offsets']
+                offsets = [offset for offset in offsets if offset[2] >= 2.5]
+                for offset in offsets:
+                    direction = offset[0]
+                    print direction
+                    dx, dy = offset[1]
+                    if direction == 'top':
+                        x, y = n_col, n_row-1
+                    elif direction == 'right':
+                        x, y = n_col+1, n_row
+                    elif direction == 'down':
+                        x, y = n_col, n_row+1
+                    elif direction == 'left':
+                        x, y = n_col-1, n_row
+                    try:
+                        neighbor = self.rows[y][x]
+                    except IndexError:
+                        pass
+                    else:
+                        try:
+                            coordinates[neighbor]
+                        except KeyError:
+                            x, y = coordinates[root]
+                            coordinates[neighbor] = (x + dx, y + dy)
+                            print coordinates[neighbor]
+                            neighbors.append(neighbor)
+            print 'Neighbors', neighbors
+            roots = neighbors
+            if not len(roots):
+                break
 
         return self.clean_coordinates(coordinates)
 
 
 
 
-    def cv_offset(self, img1, img2):
+    def cv_reliability(self, n_cluster, n_total):
+        """Assess reliability of offset"""
+        # Offset reliability test
+        #  1. Are there a large number of matches?
+        #  2. Are most of those matches part of the same cluster?
+        #  Guesses: 4/5, 4/6, 5/7, 5/8, 6/9, 50% of 10+
+        if n_total < 5:
+            return 0
+        else:
+            pct_cluster = n_cluster / float(n_total)
+            return n_cluster * pct_cluster
 
+
+
+
+    def cv_weight_scores(self, a, b):
+        return a + b - 0.5 * abs(a - b)
+
+
+
+
+    def cv_offset(self, img1, img2, scalar=2, threshold=0.6, eqhist=True):
+        start_time = datetime.now()
         # Read descriptors
         for fp in (img2, img1):
             if not bool(fp):
-                return -1, (0, 0)
+                return None
             try:
                 self.keypoints[fp]
             except:
                 print 'Getting keypoints for {}'.format(fp)
                 img = cv2.imread(fp, 0)
+                if scalar > 1:
+                    img = cv2.resize(img, (self.w/scalar, self.h/scalar))
+                if eqhist:
+                    img = cv2.equalizeHist(img)
                 self.keypoints[fp] = self.sift.detectAndCompute(img, None)
+                del img
 
         kp1, des1 = self.keypoints[img1]
         if not (any(kp1) and np.any(des1)):
             print 'No keypoints found in {}'.format(img1)
-            return -1, (0,0)
+            return None
 
         kp2, des2 = self.keypoints[img2]
         if not (any(kp2) and np.any(des2)):
             print 'No keypoints found in {}'.format(img2)
-            return -1, (0,0)
+            return None
 
-        print 'Matching features in {1} and {0}'.format(img1, img2)
         # FLANN parameters
         FLANN_INDEX_KDTREE = 0
         index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
@@ -376,7 +429,7 @@ class Mosaic(object):
             matches = flann.knnMatch(des1, des2, k=2)
         except cv2.error:
             print 'No matches found in {1} and {0}'.format(img1, img2)
-            return -1, (0,0)
+            return None
 
         # Matches consist of DMatch objects, which among other things
         # contain coordinates for keypoints in kp1 and kp2. These can
@@ -388,11 +441,12 @@ class Mosaic(object):
         x = []
         y = []
         for i,(m,n) in enumerate(matches):
-            if m.distance < 0.7 * n.distance:
+            if m.distance < threshold * n.distance:
                 c1 = m.queryIdx
                 c2 = m.trainIdx
-                x.append(kp1[c1].pt[0] - kp2[c2].pt[0])
-                y.append(kp1[c1].pt[1] - kp2[c2].pt[1])
+                x.append(scalar * (kp1[c1].pt[0] - kp2[c2].pt[0]))
+                y.append(scalar * (kp1[c1].pt[1] - kp2[c2].pt[1]))
+
         if len(x) and len(y):
             # Return the largest clusters for x and y
             groups = cluster(x, 2)
@@ -405,15 +459,16 @@ class Mosaic(object):
             group = [group for group in groups if len(group)==y_max][0]
             y_avg = sum(group) / len(group)
 
-            # Log values
-            with open('offsets.csv', 'ab') as f:
-                writer = csv.writer(f, delimiter='\t')
-                writer.writerow([img2, x_avg, x_max, len(x)])
-                writer.writerow([img2, y_avg, y_max, len(y)])
-
-            # Return total matches, average offsets, and group sizes
-            return len(x), (x_avg, y_avg), (x_max, y_max)
-        return -1, (0,0)
+            # Return coordinates, total size, and cluster size
+            fn1 = os.path.basename(img1)
+            fn2 = os.path.basename(img2)
+            n = len(x)
+            m = min([x_max, y_max])
+            dt = datetime.now() - start_time
+            print ('Matched {}/{} features in {} and {}'
+                   ' (t={})').format(fn1, fn2, n, m, dt)
+            return (x_avg, y_avg), n, m)
+        return None
 
 
 
