@@ -62,7 +62,6 @@ class Mosaic(object):
                                       for row in rows if bool(row[0])
                                       and not row[0].startswith('#')])
         # Check for job parameters
-        params = pickle.load(open('params.p', 'rb'))
         try:
             params = pickle.load(open('params.p', 'rb'))
         except IOError:
@@ -70,7 +69,7 @@ class Mosaic(object):
                 cprint('Using OpenCV to stitch mosaic')
                 defaults = {
                     'equalize_histogram' : False,
-                    'matcher' : 'flann',
+                    'matcher' : 'brute-force',
                     'scalar' : 0.5,
                     'threshold' : 0.7,
                 }
@@ -80,6 +79,7 @@ class Mosaic(object):
                         self.cv_params[key] = kwargs[key]
                     except KeyError:
                         self.cv_params[key] = defaults[key]
+            self.get_tile_parameters(path)
             self.set_mosaic_parameters()
         else:
             cprint('Found parameters file')
@@ -87,8 +87,7 @@ class Mosaic(object):
             self.mag = params['mag']
             self.num_cols = params['num_cols']
             self.snake = params['snake']
-        # Assess tiles
-        self.get_tile_parameters(path)
+            self.get_tile_parameters(path)
 
 
 
@@ -116,33 +115,29 @@ class Mosaic(object):
                     cprint('Encountered unreadable tiles but could'
                            ' not fix them. Try installing ImageMagick'
                            ' and re-running this script.')
+                    sys.exit()
         self.ext = os.path.splitext(fp)[1]
         self.w, self.h = img.size
 
         tiles = glob.glob(os.path.join(path, '*' + self.ext))
-        tiles = [fp.encode('latin1').decode('latin1') for fp in tiles]
-        self.tiles = self.handle_tiles(tiles)
-
-        # Match to existing coordinates if using saved parameters
         try:
-            keys = self.handle_tiles(self.coordinates.keys(), False)
-        except AttributeError:
+            tiles = [fp.encode('latin1').decode('latin1') for fp in tiles]
+        except:
             pass
-        else:
-            coordinates = {}
-            i = 0
-            while i < len(keys):
-                coordinates[tiles[i]] = self.coordinates[keys[i]]
-                i += 1
-            self.coordinates = coordinates
+        self.tiles = self.handle_tiles(tiles)
 
         # Mandolin tileset if using saved parameters
         try:
-            self.rows = mandolin(self.tiles, self.num_cols)
+            self.snake
         except AttributeError:
             pass
         else:
+            self.rows = mandolin(self.tiles, self.num_cols)
             self.num_rows = len(self.rows)
+            if self.snake:
+                self.rows = [self.rows[i] if not i % 2
+                             else self.rows[i][::-1]
+                             for i in xrange(0, len(self.rows))]
 
         if path.strip('/').endswith('working'):
             path = os.path.split(path)[0]
@@ -188,12 +183,16 @@ class Mosaic(object):
                          for i in xrange(0, len(self.rows))]
         # Review parameters
         cprint('Review parameters for your mosaic:')
-        cprint(' Dimensions:          {}x{}'.format(self.num_cols,
-                                                    self.num_rows))
-        cprint(' Magnification:       {}'.format(self.mag))
-        cprint(' Snake :              {}'.format(self.snake))
-        cprint(' Autostitch:          {}'.format(self.opencv))
-        cprint(' Create JPEG:         {}'.format(self.jpeg))
+        cprint(' Create JPEG:    {}'.format(self.jpeg))
+        cprint(' Dimensions:     {}x{}'.format(self.num_cols, self.num_rows))
+        cprint(' Magnification:  {}'.format(self.mag))
+        cprint(' Snake :         {}'.format(self.snake))
+        cprint(' Autostitch:     {}'.format(self.opencv))
+        if self.opencv:
+            cprint('  Equalize hist: {}'.format(self.cv_params['equalize_histogram']))
+            cprint('  Matcher:       {}'.format(self.cv_params['matcher']))
+            cprint('  Scalar:        {}'.format(self.cv_params['scalar']))
+            cprint('  Threshold:     {}'.format(self.cv_params['threshold']))
         if prompt('Do these parameters look good?', yes_no):
             # Determine offsets
             if self.opencv:
@@ -202,7 +201,7 @@ class Mosaic(object):
             else:
                 cprint('Setting offset...')
                 self.coordinates = self.set_coordinates()
-            # Write job parameters to file
+            # Record job parameters to file
             params = [
                 self.filename,
                 '-' * len(self.filename),
@@ -214,17 +213,17 @@ class Mosaic(object):
             if self.opencv:
                 params.extend([
                     'Autostitch: {}'.format(self.opencv),
-                    'Equalize histogram:'
-                    ' {}'.format(self.opencv_params['eqhist']),
-                    'Matcher: {}'.format(self.opencv_params['matcher']),
-                    'Scalar: {}'.format(self.opencv_params['scalar']),
-                    'Threshold: {}'.format(self.opencv_params['threshold']),
+                    'Equalize histogram: {}'.format(self.cv_params['equalize_histogram']),
+                    'Matcher: {}'.format(self.cv_params['matcher']),
+                    'Scalar: {}'.format(self.cv_params['scalar']),
+                    'Threshold: {}'.format(self.cv_params['threshold']),
                     ''
                     ])
             params.append('Tile coordinates:')
             for key in sorted(self.coordinates.keys()):
                 params.append('{}: {}'.format(key, self.coordinates[key]))
-            fp = os.path.join(self.path, os.pardir, self.filename + '.txt')
+            #fp = os.path.join(self.path, os.pardir, self.filename + '.txt')
+            fp = self.filename + '.txt'
             with open(fp, 'wb') as f:
                 f.write('\n'.join(params))
             # Pickle key parameters for re-use later
@@ -273,7 +272,8 @@ class Mosaic(object):
                          y_offset_within_row * n_col)
                     if y_offset_within_row < 0:
                         y -= y_offset_within_row * (self.num_cols - 1)
-                    coordinates[fp] = (x, y)
+                    position = 'x'.join([str(n) for n in [n_col, n_row]])
+                    coordinates[position] = (x, y)
                 n_col += 1
             n_row += 1
         return self.clean_coordinates(coordinates)
@@ -325,6 +325,8 @@ class Mosaic(object):
                 n_col += 1
             n_row += 1
 
+        self.analyze_offsets(tiles)
+
         # Score matches between tiles to find a well-positioned tile
         root = None
         high_score = -1
@@ -340,20 +342,18 @@ class Mosaic(object):
                     high_score = score
 
         # Place tiles relative to the root tile from above
-        coordinates = {root : (0,0)}
-        roots = [root]
+        position = 'x'.join([str(n) for n in tiles[root]['position']])
+        coordinates = {position : (0,0)}
+        roots = [position]
         while True:
             neighbors = []
             for root in roots:
+                n_col, n_row = [int(n) for n  in root.split('x')]
+                tile = tiles[self.rows[n_row][n_col]]
                 cprint(('Positioning tiles adjacent to'
                        ' {}...').format(os.path.basename(root)), self.verbose)
-                try:
-                    tile = tiles[root]
-                except KeyError:
-                    continue
-                n_col, n_row = tile['position']
                 offsets = tile['offsets']
-                offsets = [offset for offset in offsets if offset[2] >= 2.5]
+                offsets = [offset for offset in offsets if offset[2] >= 5]
                 for offset in offsets:
                     direction = offset[0]
                     dx, dy = offset[1]
@@ -366,22 +366,31 @@ class Mosaic(object):
                     elif direction == 'left':
                         x, y = n_col-1, n_row
                     try:
-                        neighbor = self.rows[y][x]
+                        self.rows[y][x]
                     except IndexError:
                         pass
                     else:
+                        position = 'x'.join([str(n) for n in [x, y]])
                         try:
-                            coordinates[neighbor]
+                            coordinates[position]
                         except KeyError:
                             x, y = coordinates[root]
-                            coordinates[neighbor] = (x + dx, y + dy)
-                            neighbors.append(neighbor)
+                            coordinates[position] = (x + dx, y + dy)
+                            neighbors.append(position)
             roots = neighbors
             if not len(roots):
                 break
+        coordinates = self.clean_coordinates(coordinates)
+        return coordinates
 
-        return self.clean_coordinates(coordinates)
 
+
+
+    def analyze_offsets(self, tiles):
+        for tile in self.tiles:
+            tile = tiles[tile]
+            n_row, n_col = tile['position']
+            offsets = tile['offsets']
 
 
 
@@ -463,17 +472,13 @@ class Mosaic(object):
         # the average is based on a simple cluster analysis of matches
         # detected between the two images.
 
-        # Identify good matches using ratio test from Lowe's paper
+        # Identify good matches using ratio test from Lowe's paper. The
+        # length test bypasses an error in which some matches returned
+        # by the detector.knnMatch() function have <k results.
         good = []
-        try:
-            for m, n in matches:
-                if m.distance < threshold * n.distance:
-                    good.append(m)
-        except:
-            print fn1, fn2
-            for m in matches:
-                print m
-            raw_input()
+        for m, n in [m for m in matches if len(m)==2]:
+            if m.distance < threshold * n.distance:
+                good.append(m)
 
         fn1 = os.path.basename(img1)
         fn2 = os.path.basename(img2)
@@ -574,16 +579,32 @@ class Mosaic(object):
         # Create the mosaic
         cprint('Stitching mosaic...')
         mosaic = Image.new('RGB', (mosaic_width, mosaic_height), (255,255,255))
-        for fp in self.coordinates:
-            x, y = self.coordinates[fp]
-            # Encode the name
-            try:
-                mosaic.paste(Image.open(fp.encode('cp1252')), (x, y))
-            except:
-                cprint('Encountered unreadable tiles but'
-                       ' could not fix them. Try installing'
-                       ' ImageMagick and re-running this'
-                       ' script.')
+        n_row = 0
+        while n_row < len(self.rows):
+            row = self.rows[n_row]
+            n_col = 0
+            while n_col < len(row):
+                position = 'x'.join([str(n) for n in [n_col, n_row]])
+                try:
+                    x, y = self.coordinates[position]
+                except KeyError:
+                    n_col += 1
+                    continue
+                else:
+                    fp = self.rows[n_row][n_col]
+                # Encode the name
+                try:
+                    mosaic.paste(Image.open(fp.encode('cp1252')), (x, y))
+                except UnicodeDecodeError:
+                    mosaic.paste(Image.open(fp), (x, y))
+                except OSError:
+                    cprint('Encountered unreadable tiles but'
+                           ' could not fix them. Try installing'
+                           ' ImageMagick and re-running this'
+                           ' script.')
+                    sys.exit()
+                n_col += 1
+            n_row += 1
         # Add label
         if label:
             ttf = os.path.join(self.basepath, 'files', 'OpenSans-Regular.ttf')
@@ -604,7 +625,8 @@ class Mosaic(object):
             y = mosaic_height - int(label_height)
             draw.text((x, y), text, (0, 0, 0), font=font)
         cprint('Saving as {}...'.format(self.extmap[self.ext]))
-        fp = os.path.join(self.path, os.pardir, self.filename + '.tif')
+        #fp = os.path.join(self.path, os.pardir, self.filename + '.tif')
+        fp = self.filename + '.tif'
         mosaic.save(fp, self.extmap[self.ext])
         if self.jpeg and self.extmap[self.ext] != 'JPEG':
             cprint('Saving as JPEG...')
@@ -703,7 +725,7 @@ class Mosaic(object):
             if len(missing) and not len(empties):
                 cprint('Warning: The following tiles appear to be missing:')
                 for key in sorted(missing):
-                    cprint('Index {}'.format(key))
+                    cprint(' Index {}'.format(key))
                     tiles.insert(key-1, '')
             else:
                 cprint('All tiles appear to be present')
@@ -804,9 +826,13 @@ def mosey(path=None, skipped=None, jpeg=False, opencv=False, **kwargs):
         kwargs['path'] = tkFileDialog.askdirectory(parent=root, title=title,
                                                    initialdir=initial)
     # Check for tiles. If none found, try the parent directory.
-    tilesets = [os.path.join(path, dn) for dn in os.listdir(path)
-                if os.path.isdir(os.path.join(path, dn))
-                and not dn == 'skipped']
+    try:
+        tilesets = [os.path.join(path, dn) for dn in os.listdir(path)
+                    if os.path.isdir(os.path.join(path, dn))
+                    and not dn == 'skipped']
+    except:
+        cprint('Invalid path : {}. Exiting.'.format(path))
+        sys.exit()
     if not len(tilesets):
         cprint('No subdirectories found in {}. Processing'
                ' main directory instead.'.format(path))
@@ -825,7 +851,7 @@ def mosey(path=None, skipped=None, jpeg=False, opencv=False, **kwargs):
         else:
             if skipped:
                 skiplists.append(path)
-        if 'bsed' in path:
+        if 'bsed' in path or 'ppl' in path:
             tilesets.insert(0, tilesets.pop(tilesets.index(path)))
     if len(skiplists) > 1:
         cprint('Warning: Multiple skip lists found:\n ' + ' \n'.join(skiplists))
@@ -837,7 +863,7 @@ def mosey(path=None, skipped=None, jpeg=False, opencv=False, **kwargs):
         Mosaic(path, skipped, jpeg, opencv, **kwargs).create_mosaic()
     # Remove parameters file
     try:
-        pass#os.remove('params.p')
+        os.remove('params.p')
     except OSError:
         pass
 
