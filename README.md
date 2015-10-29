@@ -4,8 +4,8 @@ Stitch2D
 *Some features in this script require [OpenCV 3.0](http://opencv.org/)
 and [ImageMagick](http://www.imagemagick.org/).*
 
-A simple image-stitching program used to stitch a two-dimensional grid
-of tiles into a mosaic. You can install it from the command line using pip:
+A Python script used to stitch a two-dimensional grid of tiles into a mosaic.
+You can install it from the command line using pip:
 
 ```
 pip install stitch2d
@@ -26,7 +26,8 @@ line using -h.
 mosaic
 ------
 Use the mosaic subcommand to stitch together a set of tiles. The resulting
-mosaic is saved in the parent of the directory containing the source tiles. From the command line:
+mosaic is saved in the parent of the directory containing the source tiles.
+From the command line:
 
 ```
 stitch2d mosaic
@@ -108,7 +109,7 @@ OpenCV
 ------------
 [OpenCV](http://www.opencv.org/) is a super useful, basically
 open source computer vision library. It's a bit complicated to
-install. I found the following tutorials useful:
+install. I found th following tutorials useful:
 *  [OSX](http://www.pyimagesearch.com/2015/06/15/install-opencv-3-0-and-python-2-7-on-osx/) (check the comments if you have issues getting the Python bindings
   to show up)
 * [Ubuntu](http://www.pyimagesearch.com/2015/06/22/install-opencv-3-0-and-python-2-7-on-ubuntu/)
@@ -117,6 +118,6 @@ install. I found the following tutorials useful:
 ImageMagick
 -----------
 The Python Imaging Library will sometimes fail to open TIFFs. When the
-mosaic script encounters unreadable TIFFs, it uses [ImageMagick](http://www.imagemagick.org/) to create a usable copy of the
+mosaic script encounters unreadable TIFFs, it uses ImageMagick](http://www.imagemagick.org/) to create a usable copy of the
 entire tile set. If ImageMagick is not installed, this workaround will
 fail and the mosaic will not be created.
