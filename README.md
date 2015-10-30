@@ -1,8 +1,7 @@
 Stitch2D
-==============
+========
 
-*Some features in this script require [OpenCV 3.0](http://opencv.org/)
-and [ImageMagick](http://www.imagemagick.org/).*
+*Some features in this script require OpenCV 3.0 and ImageMagick.*
 
 A Python script used to stitch a two-dimensional grid of tiles into a mosaic.
 You can install it from the command line using pip:
@@ -42,6 +41,7 @@ stitch2d mosaic -p /path/to/tiles -matcher brute-force \
 ```
 
 Optional arguments include:
+
 *  **-path**: Specifies to path to the source tiles. This argument works in
    all subcommands except organize. If no path is specified, you will be
    prompted to select a directory.
@@ -51,6 +51,7 @@ Optional arguments include:
    default to manual matching if OpenCV is not installed.
 
 The following arguments can be used to tweak the behavior of OpenCV:
+
 *  **-matcher**: Specifies the algorithm used for feature matching. Must
    be either "brute-force" or "flann"; "brute-force" is the default.
 *  **-scalar**: Specifies the amount by which to resize source tiles
@@ -99,25 +100,26 @@ suitable for mosaicking. It accepts optional arguments for the source and
 destination directories:
 
 ```
-stitch2d organize C:\path\to\source C:\path\to\destination
+stitch2d organize /path/to/source /path/to/destination
 ```
 
 Recommended Libraries
 =====================
 
 OpenCV
-------------
+------
 [OpenCV](http://www.opencv.org/) is a super useful, basically
 open source computer vision library. It's a bit complicated to
-install. I found th following tutorials useful:
-*  [OSX](http://www.pyimagesearch.com/2015/06/15/install-opencv-3-0-and-python-2-7-on-osx/) (check the comments if you have issues getting the Python bindings
+install. I found the following tutorials useful:
+
+*  [OS X](http://www.pyimagesearch.com/2015/06/15/install-opencv-3-0-and-python-2-7-on-osx/) (check the comments if you have issues getting the Python bindings
   to show up)
-* [Ubuntu](http://www.pyimagesearch.com/2015/06/22/install-opencv-3-0-and-python-2-7-on-ubuntu/)
+*  [Ubuntu](http://www.pyimagesearch.com/2015/06/22/install-opencv-3-0-and-python-2-7-on-ubuntu/)
 *  [Windows](http://docs.opencv.org/3.0-beta/doc/tutorials/introduction/windows_install/windows_install.html)
 
 ImageMagick
 -----------
 The Python Imaging Library will sometimes fail to open TIFFs. When the
-mosaic script encounters unreadable TIFFs, it uses ImageMagick](http://www.imagemagick.org/) to create a usable copy of the
+mosaic script encounters unreadable TIFFs, it uses [ImageMagick](http://www.imagemagick.org/) to create a usable copy of the
 entire tile set. If ImageMagick is not installed, this workaround will
 fail and the mosaic will not be created.
