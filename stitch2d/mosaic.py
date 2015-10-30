@@ -938,7 +938,7 @@ def mogrify(path, ext):
         os.mkdir(subdir)
     except OSError:
         pass
-    cmd = 'mogrify -path "{0}" -format {1} *.{1}'.format(subdir, ext)
+    cmd = 'mogrify -path "working" -format {0} *.{0}'.format(ext)
     args = shlex.split(cmd)
     try:
         subprocess.call(args, cwd=path)
