@@ -22,6 +22,10 @@ There are three subcommands that can be accessed from the command line.
 Information for about of these commands can be accessed from the command
 line using -h.
 
+The options available in this module are fairly basic. For more complex
+tilesets, consider using the [image stitching plugin](http://fiji.sc/Image_Stitching)
+in Fiji.
+
 mosaic
 ------
 Use the mosaic subcommand to stitch together a set of tiles. The resulting
