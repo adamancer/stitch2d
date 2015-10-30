@@ -20,7 +20,7 @@ except ImportError:
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from .helpers import cprint, prompt
+from .helpers import cprint, mandolin, mogrify, prompt
 from .offset import OffsetEngine
 
 
@@ -907,42 +907,3 @@ def handle_skipped(path):
                     for i in f.read().splitlines()]
         except TypeError:
             raise TypeError
-
-
-
-
-def mandolin(lst, n):
-    """Split list into groups of n members
-
-    @param list
-    @param int
-    @return list
-    """
-    mandolined = [lst[i*n:(i+1)*n] for i in range(len(lst) / n)]
-    remainder = len(lst) % n
-    if remainder:
-        leftovers = lst[-remainder:]
-        mandolined.append(leftovers + [''] * (n - len(leftovers)))
-    return mandolined
-
-
-
-
-def mogrify(path, ext):
-    """Saves copy of tiles to subfolder"""
-    cprint('There was a problem opening some of the tiles!\n'
-           'Copying tiles into a usable format...')
-    ext = ext.strip('*.')
-    subdir = os.path.join(path, 'working')
-    try:
-        os.mkdir(subdir)
-    except OSError:
-        pass
-    cmd = 'mogrify -path "working" -format {0} *.{0}'.format(ext)
-    args = shlex.split(cmd)
-    try:
-        subprocess.call(args, cwd=path)
-    except:
-        return False
-    else:
-        return True
