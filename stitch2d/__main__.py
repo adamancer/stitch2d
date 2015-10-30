@@ -42,9 +42,9 @@ def main(args=None):
 
     def select_callback(args):
         args = vars(args)
-        selector = Selector(args['path'])
+        selector = stitch2d.Selector(args['path'])
         params = selector.get_job_settings()
-        stitch2d.Selector().select(*params)
+        selector.select(*params)
 
 
 
