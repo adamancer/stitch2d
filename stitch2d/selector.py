@@ -13,8 +13,7 @@ import pyglet
 import pyglet.window
 from PIL import Image
 
-from .mosaic import mandolin
-from .helpers import prompt
+from .helpers import cprint, mandolin, mogrify, prompt
 
 
 
@@ -142,7 +141,20 @@ class Selector(object):
         # Lighten the input tiles a bit to make the hover effect more clear
         cols = []
         grid = {}
-        for fp in glob.iglob(os.path.join(self.source, '*' + self.ext)):
+        path = self.source
+        for fp in glob.iglob(os.path.join(path, '*' + self.ext)):
+            try:
+                Image.open(fp)
+            except IOError:
+                if mogrify(path, self.ext):
+                    path = os.path.join(path, 'working')
+                else:
+                    cprint('Encountered unreadable tiles but could'
+                           ' not fix them. Try installing ImageMagick'
+                           ' and re-running this script.')
+                    sys.exit()
+            break
+        for fp in glob.iglob(os.path.join(path, '*' + self.ext)):
             # Standardize color space to RGB to prevent problems
             img = Image.open(fp).convert('RGB')
             mask = Image.new('RGB', img.size, (255,255,255))
@@ -170,6 +182,9 @@ class Selector(object):
             i = int(x) + self.num_cols * int(y)
             grid[i] = grid[key][0]
             filenames[i] = grid[key][1]
+            if os.path.dirname(filenames[i]).strip('/').endswith('working'):
+                filenames[i] = os.path.join(os.path.split(path)[0],
+                                            os.path.basename(filenames[i]))
             del grid[key]
 
         self.coordinate_width = (abs(self.ul[0] - self.lr[0]) /
@@ -338,6 +353,10 @@ class Selector(object):
                                                      self.num_rows))
                 f.write('\n'.join([str(i) for i in sorted(indexes)]))
             fp = os.path.join(self.source, 'selected.jpg')
+            try:
+                shutil.rmtree(os.path.join(self.source, 'working'))
+            except OSError:
+                pass
             pyglet.image.get_buffer_manager().get_color_buffer().save(fp)
             window.close()
             pyglet.app.exit()
