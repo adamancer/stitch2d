@@ -1,4 +1,1 @@
-numpy
 pillow
-pyopengl
-pyglet
