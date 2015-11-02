@@ -142,11 +142,11 @@ class Selector(object):
 
 
     def select(self, ul, lr, z, mag, mystery_int):
-        """Allows user to select tiles to exclude using GUI
+        """Allows user to exlude unwanted tiles using a GUI
 
         The function does the following:
 
-        * Moves skipped tiles to path/skipped. Tiles are reinitegrated
+        * Moves skipped tiles to path/skipped. Tiles are reintegrated
           into the main tileset if select is re-run.
         * Creates points file for SEM at path/points.apf
         * Creates an image showing selections at path/selected.jpg
@@ -155,11 +155,11 @@ class Selector(object):
         :code:`stitch2d select`
 
         Args:
-            ul (int): center of upper left tile in SEM coordinate space
-            lr (int): center of upper lower right in SEM coordinate space
-            z (int): stage height
-            mag (int): SEM magnification
-            mystery_int (int): unknown SEM parameter from .apf file
+            ul (float): center of upper left tile in SEM coordinate space
+            lr (float): center of upper lower right in SEM coordinate space
+            z (float): stage height
+            mag (float): SEM magnification
+            mystery_int (float): unknown SEM parameter from .apf file
 
         Returns:
             None

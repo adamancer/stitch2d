@@ -1,10 +1,11 @@
 """A Python script used to stitch a two-dimensional tileset into a mosaic.
 It includes functions to test and sort the tilset and to determine the
-placement of tiles within the final mosaic.
+placement of tiles within the final mosaic. Install with
+:code:`pip install stitch2d`.
 
 The easiest way to stitch a tileset is to use the
 :py:func:`~Stitch2D.Mosaic.mosey` function, which is accessible
-from the command line: :code:`stitch2d mosaic`; use the -h flag to
+from the command line: :code:`stitch2d mosaic`. Use the -h flag to
 see additional options.
 """
 
@@ -83,7 +84,13 @@ class Counter(dict):
 
 
 class Mosaic(object):
-    """Contains functions and data required to create a mosaic from a tilset
+    """Contains functions and metadata needed to create a mosaic from a tilset
+
+    Class attributes describe the tiles and tileset and are
+    populated using :py:func:`~Stitch2D.mosaic.populate_tiles`.
+    To make a mosaic, use :py:func:`~Stitch2D.mosaic.prepare_mosaic`
+    to calculate the coordinates, then pass the coordinates to
+    :py:func:`~Stitch2D.mosaic.create_mosaic` to stitch.
 
     Attributes:
         grid (list): specifies position of tiles in grid
@@ -93,6 +100,8 @@ class Mosaic(object):
         snake (bool): specifies snake pattern
         coordinates (dict): coordinates of tiles in mosaic keyed
             to filepaths
+        keypoints (dict): keypoints detected by OpenCV keyed to
+            filepaths
     """
 
     def __init__(self, path, param_file=None, skip_file=None):
