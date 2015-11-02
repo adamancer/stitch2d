@@ -1,3 +1,5 @@
+"""Sorts element maps created by NSS into element-specific folders"""
+
 import glob
 import os
 import re
@@ -8,8 +10,18 @@ import Tkinter
 
 
 
-def get_name(fn):
-    """Identify elements by examining filenames from NSS"""
+def _get_name(fn):
+    """Identifies elements by parsing filenames from NSS
+
+    A typical file name is of the form
+    {specimen_name}\[Grid@{x} {y}\]_Counts_{element}_K_map.tif.
+
+    Args:
+        fn (str): filename for NSS element map
+
+    Returns:
+        Directory name of the form {specimen_name}_{element}
+    """
     re_specimen = re.compile('[^\[]+')
     re_map = re.compile('_([A-z]{1,2})_[A-z+]{1,3}_map')
 
@@ -29,8 +41,19 @@ def get_name(fn):
 
 
 
-def organizer(src_dir=None, dst_dir=None):
-    """Organizes maps created by NSS by element"""
+def organize(src_dir=None, dst_dir=None):
+    """Organizes maps created by NSS into element-specific folders
+
+    This function is accessible from the command line:
+    :code:`stitch2d organize <src_dir> <dst_dir>`
+
+    Args:
+        src_dir (str): path to folder containing unsorted tiles
+        dst_dir (str): path to folder to which to copy the sorted tiles
+
+    Returns:
+        None
+    """
     root = Tkinter.Tk()
     root.withdraw()
 
@@ -53,7 +76,7 @@ def organizer(src_dir=None, dst_dir=None):
     for fp in glob.iglob(os.path.join(src_dir, '*.tif')):
         # Set directory name
         fn = os.path.basename(fp)
-        dn = get_name(fn)
+        dn = _get_name(fn)
         if dn:
             total += 1
             # Create directory if neccesary
