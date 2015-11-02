@@ -19,7 +19,7 @@ import shlex
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('../../'))
+sys.path.insert(0, os.path.abspath('..'))
 
 # -- General configuration ------------------------------------------------
 
@@ -81,10 +81,9 @@ language = 'en'
 # directories to ignore when looking for source files.
 exclude_patterns = [
     '_build',
-    '../helpers.py'
-    '../offset.py'
-    '../../register.py',
-    '../../setup.py'
+    '../register.py'
+    '../stitch2d/helpers.py'
+    '../stitch2d/offset.py'
     ]
 
 # The reST default role (used for this markup: `text`) to use for all
