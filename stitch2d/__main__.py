@@ -1,3 +1,5 @@
+"""Command line tools for preparing and stitching tilesets"""
+
 import argparse
 import sys
 
@@ -24,18 +26,39 @@ def main(args=None):
 
 
     def mosaic_callback(args):
+        """Calls mosey function from mosaic.py
+
+        Args:
+            args['path'] (str): path to tiles
+            args['create_jpeg']: specifies whether to create
+                JPEG derivative
+            args['manual']: force manual stitch
+            args['scalar']: amount to scale images before feature
+                matching. Does not affect tiles used in final mosaic.
+            args['threshold']: threshold for Lowe test. Autostich
+                only
+            args['equalize_histogram']: use equalize histogram to
+                increase contrast in source tiles
+        """
         args = vars(args)
         path = args.pop('path')
         jpeg = args.pop('create_jpeg')
         opencv = not args.pop('manual')
-        stitch2d.mosey(path, jpeg=jpeg, opencv=opencv, **args)
+        stitch2d.mosey(path, create_jpeg=jpeg, opencv=opencv, **args)
 
 
 
 
     def organize_callback(args):
+        """Calls organizer function from organize.py
+
+        Args:
+            args['source'] (str): path to folder containing unsorted tiles
+            args['destination'] (str): path to folder to which to copy
+                the sorted tiles
+        """
         args = vars(args)
-        stitch2d.organizer(args['source'], args['destination'])
+        stitch2d.organize(args['source'], args['destination'])
 
 
 
@@ -81,13 +104,13 @@ def main(args=None):
         dest = 'matcher',
         type=str,
         choices=['brute-force', 'flann'],
-        default=stitch2d.mosaic.OPENCV_MATCHER,
+        default='brute-force',
         help='specifies algorithm to use for matching')
     mosaic_parser.add_argument(
         '-scalar',
         dest = 'scalar',
         type=I,
-        default=stitch2d.mosaic.OPENCV_SCALAR,
+        default=0.5,
         help=('amount to scale images before'
               ' matching. Smaller images are'
               ' faster but less accurate.'))
@@ -95,7 +118,7 @@ def main(args=None):
         '-threshold',
         dest = 'threshold',
         type=I,
-        default=stitch2d.mosaic.OPENCV_THRESHOLD,
+        default=0.7,
         help=('threshold to use for ratio test. Lower values give'
               ' fewer but better matches.'))
     mosaic_parser.add_argument(
