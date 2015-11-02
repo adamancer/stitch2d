@@ -1,3 +1,5 @@
+"""A collection of general use functions used by the stitch2d module"""
+
 import os
 import re
 import shlex
@@ -8,8 +10,39 @@ from textwrap import fill
 
 
 
+def cluster(data, maxgap):
+    '''Group data such that successive elements differ by no more than maxgap
+
+       Based on http://stackoverflow.com/questions/14783947
+
+       Args:
+           data (list): list of numbers (either floats or integers)
+           maxgap (int): maximum acceptable gap between successive elements
+
+       Returns:
+           List of clusters
+    '''
+    data.sort()
+    groups = [[data[0]]]
+    for x in data[1:]:
+        if abs(x - groups[-1][-1]) <= maxgap:
+            groups[-1].append(x)
+        else:
+            groups.append([x])
+    return groups
+
+
+
 def cprint(s, show=True):
-    """Conditional print"""
+    """Prints string only if conditional is true
+
+    Args:
+        s (str): string to print
+        show (bool): specifies whether to print
+
+    Returns:
+        None
+    """
     if bool(s) and show:
         print fill(s, subsequent_indent='  ')
 
@@ -20,11 +53,20 @@ def prompt(prompt, validator, confirm=False,
            helptext='No help text provided', errortext='Invalid response!'):
     """Prompts user and validates response based on validator
 
-    @param string
-    @param regex, list, or dict
-    @param boolean
-    @param string
-    @param string
+    Args:
+        prompt (str or unicode): prompt to display to user
+        validator (str, list, or dict): object used to validate user
+            response
+        confirm (bool): specifies whether to have user verify response
+        helptext (str or unicode): text to display if user enters '?'
+        errortext (str or unicode): text to display if response
+            does not validate
+
+    Returns:
+        A unicode string containing the validated user input
+
+    Raises:
+        Unspecified error: Validator is not dict, list, or str
     """
     # Prepare string
     prompt = u'{} '.format(prompt.rstrip())
@@ -94,7 +136,17 @@ def prompt(prompt, validator, confirm=False,
 
 
 def mogrify(path, ext):
-    """Saves copy of tiles to subfolder"""
+    """Uses ImageMagick to copy source files to a working directory
+
+    Requires ImageMagick to be installed and on the system path.
+
+    Args:
+        path (str): filepath to directory containing images
+        ext (str): extension of files to copy from path
+
+    Returns:
+        True if mogrify command succeeds, False if not
+    """
     cprint('There was a problem opening some of the tiles!\n'
            'Copying tiles into a usable format...')
     ext = ext.strip('*.')
@@ -114,12 +166,20 @@ def mogrify(path, ext):
 
 
 
+
 def mandolin(lst, n):
     """Split list into groups of n members
 
-    @param list
-    @param int
-    @return list
+    Based on http://stackoverflow.com/questions/9671224/
+
+    Args:
+        lst (list): list containing anything you like
+        n (int): length of members
+
+    Returns:
+        List of lists of n members. The last value is padded
+        with empty strings to n if the original list is not
+        exactly divisible by n.
     """
     mandolined = [lst[i*n:(i+1)*n] for i in range(len(lst) / n)]
     remainder = len(lst) % n
