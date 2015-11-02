@@ -3,31 +3,41 @@ Stitch2D
 
 *Some features in this script require OpenCV 3.0 and ImageMagick.*
 
-A Python script used to stitch a two-dimensional grid of tiles into a mosaic.
-You can install it from the command line using pip:
+Stitch2D is a Python script that can be used to stitch a two-dimensional
+grid of tiles into a mosaic. You can install it from the command line
+using pip:
 
 ```
 pip install stitch2d
 ```
+
+Overview
+-------
 
 Users can set offsets manually (if the offset is regular) or automatically
 (if OpenCV is installed). If OpenCV is used, tiles that cannot be placed
 confidently are excluded from the final mosaic. Tiles are not warped in
 either case.
 
-To use, first collect the tilesets you want to stitch as subdirectories
-in a single folder. Each subdirectory will be processed using the same
-parameters, so offsets for the different tilesets should be similar.
-There are three subcommands that can be accessed from the command line.
-Information for about of these commands can be accessed from the command
-line using -h.
-
 The options available in this module are fairly basic. For more complex
 tilesets, consider using the [image stitching plugin](http://fiji.sc/Image_Stitching)
 in Fiji.
 
-mosaic
-------
+[Documentation](http://stitch2d.readthedocs.org/en/latest/stitch2d.html) is available at ReadTheDocs.
+
+Using the Command Line Tools
+----------------------------
+
+Begin by collecting the tilesets you want to stitch as subdirectories
+in a single folder. Each subdirectory will be processed using the same
+parameters, so offsets for the different tilesets should be very similar.
+
+There are three subcommands that can be accessed from the command line:
+mosaic, organize, and select. In addition to the text below, information
+about of these commands can be accessed from the command line using -h.
+
+**mosaic**
+
 Use the mosaic subcommand to stitch together a set of tiles. The resulting
 mosaic is saved in the parent of the directory containing the source tiles.
 From the command line:
@@ -72,8 +82,8 @@ The following arguments can be used to tweak the behavior of OpenCV:
 More information about these values can be found in the [OpenCV-Python
 tutorials](https://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_feature2d/py_table_of_contents_feature2d/py_table_of_contents_feature2d.html).
 
-selector
---------
+**select**
+
 Use the selector tool to select tiles to exclude from future SEM
 element mapping. This tool does the following:
 
@@ -96,8 +106,8 @@ Click the tiles you'd like to remove, or click a darkened tile to reinstate it.
 As with the mosaic script, the select command accepts an optional path argument
 using the -p flag.
 
-organizer
----------
+**organize**
+
 This command organizes
 element maps produces by Noran System Seven into element-specific folders
 suitable for mosaicking. It accepts optional arguments for the source and
