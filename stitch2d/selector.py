@@ -1,3 +1,6 @@
+"""Allows users to select tiles to remove from future
+data collection or mosaicking."""
+
 import decimal
 import glob
 import os
@@ -84,11 +87,14 @@ class Selector(object):
 
 
 
-    def get_job_settings(self):
-        """ Get job settings
+    def _get_job_settings(self):
+        """Reads job settings from .apf file
 
-        Attempts to read job settings from text file. Failing that,
-        it will prompt the user to input that information manually.
+        If the function cannot find an .apf file, it will
+        prompt the user to supply the necessary parameters.
+
+        Returns:
+            (ul, lr, z, mag, mystery_int)
         """
         settings = glob.glob(os.path.join(self.source, '*.apf'))
         if len(settings):
@@ -136,7 +142,28 @@ class Selector(object):
 
 
     def select(self, ul, lr, z, mag, mystery_int):
-        """ Allow user to select tiles to keep """
+        """Allows user to select tiles to exclude using GUI
+
+        The function does the following:
+
+        * Moves skipped tiles to path/skipped. Tiles are reinitegrated
+          into the main tileset if select is re-run.
+        * Creates points file for SEM at path/points.apf
+        * Creates an image showing selections at path/selected.jpg
+
+        This function is accessible from the command line:
+        :code:`stitch2d select`
+
+        Args:
+            ul (int): center of upper left tile in SEM coordinate space
+            lr (int): center of upper lower right in SEM coordinate space
+            z (int): stage height
+            mag (int): SEM magnification
+            mystery_int (int): unknown SEM parameter from .apf file
+
+        Returns:
+            None
+        """
         print 'Preparing selection grid...'
         # Lighten the input tiles a bit to make the hover effect more clear
         cols = []
@@ -233,7 +260,7 @@ class Selector(object):
                 else:
                     x = n_col * (w + 1)
                     y = adjusted_height - (n_row + 1) * (h + 1)
-                    img = self.pil_to_pyglet(img, 'RGB')
+                    img = self._pil_to_pyglet(img, 'RGB')
                     sprites.append(pyglet.sprite.Sprite(img, x=x, y=y,
                                                         batch=batch))
                     tiles.append((n_col, n_row))
@@ -313,7 +340,7 @@ class Selector(object):
             points = []
             grid = []
             for tile in keep:
-                center = self.get_center(tile)
+                center = self._get_center(tile)
                 points.append([
                     'Pt:',
                     '{:.4f}'.format(center[0]),
@@ -378,7 +405,7 @@ class Selector(object):
 
 
 
-    def get_center(self, coordinates):
+    def _get_center(self, coordinates):
         """Calculates center points for each title based on ul and lr"""
         x, y = coordinates
         center = (self.ul[0] + self.coordinate_width * x,
@@ -388,8 +415,13 @@ class Selector(object):
 
 
 
-    def pil_to_pyglet(self, img, mode):
-        """Convert PIL Image to pyglet image"""
+    def _pil_to_pyglet(self, img, mode):
+        """Convert PIL Image to pyglet image
+
+        Args:
+            img (PIL.Image): existing PIL.Image instance
+            mode (str): mode of image (typically RGB or RGBA)
+        """
         w, h = img.size
         raw = img.convert(mode).tobytes('raw', mode)
         return pyglet.image.ImageData(w, h, mode, raw, -w*len(mode))
