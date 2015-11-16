@@ -47,6 +47,7 @@ IMAGE_TYPES = {
     'unspecified' : 'unspecified image type',
     'ref' : 'petrographic microscope, reflected light',
     'rfl' : 'petrographic microscope, reflected light',
+    'rl' : 'petrographic microscope, reflected light',
     'ppl' : 'petrographic microscope, transmitted light',
     'trans' : 'petrographic microscope, transmitted light',
     'xpl' : 'petrographic microscope, cross-polarized light',
@@ -152,6 +153,7 @@ class Mosaic(object):
 
         tiles = glob.glob(os.path.join(path, '*' + ext))
         tiles = self._sort(tiles)  # calculates self.dim[0] if it can
+        print 'The tileset contains {} tiles'.format(len(tiles))
         self.size = Image.open(tiles[0]).size
 
         try:
@@ -225,7 +227,7 @@ class Mosaic(object):
                 # reading TIFFs. It uses ImageMagick to copy
                 # the unreadable tiles to a subdirectory; the
                 # IM-created tiles should always be readable by PIL.
-                if ext in IMAGE_TYPES and mogrify(path, ext):
+                if ext in IMAGE_MAP and mogrify(path, ext):
                     path = os.path.join(path, 'working')
                 else:
                     cprint('Encountered unreadable tiles but could'
@@ -233,7 +235,7 @@ class Mosaic(object):
                            ' and re-running this script.')
                     sys.exit()
             break
-        return path, ext
+        return path
 
 
 
@@ -291,10 +293,11 @@ class Mosaic(object):
                 try:
                     i = int(key)
                 except ValueError:
+                    i = key
                     # Typically caused by alien tiles in the tileset
-                    e = ('Warning: Could not sort tiles. Please'
-                         ' confirm that there are no extra tiles'
-                         ' in the source folder.')
+                    #e = ('Warning: Could not sort tiles. Please'
+                    #     ' confirm that there are no extra tiles'
+                    #     ' in the source folder.')
             temp[i] = tile
         cprint(e)
         if len(cols) and not self.dim[1]:
@@ -480,7 +483,7 @@ class Mosaic(object):
                 cprint('  Threshold:          {}'.format(
                             cv_params['threshold']))
                 cprint('Determining offset...')
-                coordinates = self.cv_coordinates(**kwargs)
+                coordinates = self._cv_coordinates(**kwargs)
             else:
                 cprint('Setting offset...')
                 coordinates = self.set_coordinates()
@@ -680,7 +683,7 @@ class Mosaic(object):
                     coordinates[position] = (x, y)
                 n_col += 1
             n_row += 1
-        return self.normalize_coordinates(coordinates)
+        return self._normalize_coordinates(coordinates)
 
 
 
@@ -720,28 +723,28 @@ class Mosaic(object):
                     }
                 if n_col:
                     neighbor = row[n_col-1]
-                    offset = self.cv_match(tile, neighbor, **kwargs)
+                    offset = self._cv_match(tile, neighbor, **kwargs)
                     if offset:
                         xy, n_total, n_cluster = offset
                         nxy = (xy[0]*-1, xy[1]*-1)
-                        score = self.cv_reliability(n_cluster, n_total)
+                        score = self._cv_reliability(n_cluster, n_total)
                         tiles[tile]['offsets'].append(['left', xy, score])
                         tiles[neighbor]['offsets'].append(['right', nxy,
                                                            score])
                 if n_row:
                     neighbor = self.grid[n_row-1][n_col]
-                    offset = self.cv_match(tile, neighbor, **kwargs)
+                    offset = self._cv_match(tile, neighbor, **kwargs)
                     if offset:
                         xy, n_total, n_cluster = offset
                         nxy = (xy[0]*-1, xy[1]*-1)
-                        score = self.cv_reliability(n_cluster, n_total)
+                        score = self._cv_reliability(n_cluster, n_total)
                         tiles[tile]['offsets'].append(['top', xy, score])
                         tiles[neighbor]['offsets'].append(['down', nxy,
                                                            score])
                 n_col += 1
             n_row += 1
 
-        self.analyze_offsets(tiles)
+        self._analyze_offsets(tiles)
 
         # Score matches between tiles to find a well-positioned tile
         root = None
@@ -796,7 +799,7 @@ class Mosaic(object):
             roots = neighbors
             if not len(roots):
                 break
-        return self.normalize_coordinates(coordinates)
+        return self._normalize_coordinates(coordinates)
 
 
 
