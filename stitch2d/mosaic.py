@@ -747,18 +747,25 @@ class Mosaic(object):
         self._analyze_offsets(tiles)
 
         # Score matches between tiles to find a well-positioned tile
+        # in the middle 50% of image 
         root = None
         high_score = -1
+        min_col = 0.25 * n_col
+        max_col = n_col - min_col
+        min_row = 0.25 * n_row
+        max_row = n_col - min_row
         for tile in sorted(tiles):
-            offsets = tiles[tile]['offsets']
-            try:
-                score = sorted(offsets, key=lambda s:s[2]).pop()[2]
-            except IndexError:
-                pass
-            else:
-                if score > high_score:
-                    root = tile
-                    high_score = score
+            n_col, n_row = tiles[tile]['position']
+            if (min_col < n_col < max_col and min_row < n_row < max_row):
+                offsets = tiles[tile]['offsets']
+                try:
+                    score = sorted(offsets, key=lambda s:s[2]).pop()[2]
+                except IndexError:
+                    pass
+                else:
+                    if score > high_score:
+                        root = tile
+                        high_score = score
 
         # Place tiles relative to the root tile from above
         position = 'x'.join([str(n) for n in tiles[root]['position']])
