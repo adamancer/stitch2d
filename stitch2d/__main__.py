@@ -95,6 +95,11 @@ def main(args=None):
         'mosaic',
         help='Stitch tiles into a mosaic')
     mosaic_parser.add_argument(
+        '-label',
+        dest = 'label',
+        type=str,
+        help='the name of the mosaic (typically the sample name)')
+    mosaic_parser.add_argument(
         '-path',
         dest = 'path',
         type=str,
