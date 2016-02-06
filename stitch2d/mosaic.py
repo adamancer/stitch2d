@@ -52,6 +52,7 @@ IMAGE_TYPES = {
     'trans' : 'petrographic microscope, transmitted light',
     'xpl' : 'petrographic microscope, cross-polarized light',
     'xpol' : 'petrographic microscope, cross-polarized light',
+    'bse' : 'SEM, backscatter',
     'bsed' : 'SEM, backscatter',
     'nbsed' : 'SEM, normalized backscatter',
     'etd' : 'SEM, secondary electron',
@@ -105,7 +106,7 @@ class Mosaic(object):
             filepaths
     """
 
-    def __init__(self, path, param_file=None, skip_file=None):
+    def __init__(self, path, param_file=None, skip_file=None, label=None):
         """Initialize new Tileset
 
         The heavy lifting is done by
@@ -119,14 +120,15 @@ class Mosaic(object):
         """
         self.basepath = os.path.dirname(__file__)
         self.normal = True
-        self.verbose = True
+        self.verbose = False
 
-        self.populate_tiles(path, '.tif', param_file, skip_file)
-
-
+        self.populate_tiles(path, '.tif', param_file, skip_file, label)
 
 
-    def populate_tiles(self, path, ext, param_file=None, skip_file=None):
+
+
+    def populate_tiles(self, path, ext, param_file=None,
+                       skip_file=None, label=None):
         """Test, characterize, sort and patch tiles from path
 
         Args:
@@ -135,18 +137,23 @@ class Mosaic(object):
             param_file (str): filepath to parameters file
             skip_file (str): filepath to text file containing the
                 list of skipped indices
+            label (str): name of the mosaic (typically the sample name)
 
         Returns:
             None
         """
         # Get descriptive name of tileset based on filename
         self.filename = unicode(os.path.basename(path))
-        try:
-            self.name, image_type = self.filename.rsplit('_', 1)
-            self.name += ' ({})'.format(IMAGE_TYPES[image_type.lower()])
-        except (KeyError, ValueError):
-            # No valid suffix detected
-            self.name = self.filename
+        if label is not None:
+            self.name = label
+        else:
+            try:
+                self.name, image_type = self.filename.rsplit('_', 1)
+                self.name += ' ({})'.format(IMAGE_TYPES[image_type.lower()])
+            except (KeyError, ValueError):
+                # No valid suffix detected
+                self.name = self.filename
+        cprint('Label is "{}"'.format(self.name), self.normal)
 
         path = self._test_file(path)
         self.dim = (0, 0)
@@ -193,7 +200,7 @@ class Mosaic(object):
             cprint(' Magnification:  {}'.format(self.mag))
             cprint(' Snake :         {}'.format(self.snake))
             if review and not prompt('Confirm', {'y' : True, 'n' : False}):
-                self.populate_tiles(path)
+                self.populate_tiles(path, ext, param_file, skip_file, label)
             else:
                 self.keypoints = {}
                 return self
@@ -467,6 +474,7 @@ class Mosaic(object):
                 defaults = {
                     'equalize_histogram' : False,
                     'matcher' : 'brute-force',
+                    'homography' : False,
                     'scalar' : 0.5,
                     'threshold' : 0.7,
                 }
@@ -479,6 +487,8 @@ class Mosaic(object):
                 cprint('  Equalize histogram: {}'.format(
                             cv_params['equalize_histogram']))
                 cprint('  Matcher:            {}'.format(cv_params['matcher']))
+                cprint('  Homography:         {}'.format(
+                            cv_params['homography']))
                 cprint('  Scalar:             {}'.format(cv_params['scalar']))
                 cprint('  Threshold:          {}'.format(
                             cv_params['threshold']))
@@ -486,7 +496,7 @@ class Mosaic(object):
                 coordinates = self._cv_coordinates(**kwargs)
             else:
                 cprint('Setting offset...')
-                coordinates = self.set_coordinates()
+                coordinates = self._set_coordinates()
             # Record job parameters to file
             params = [
                 self.filename,
@@ -502,6 +512,7 @@ class Mosaic(object):
                     'Equalize histogram: {}'.format(
                         cv_params['equalize_histogram']),
                     'Matcher: {}'.format(cv_params['matcher']),
+                    'Homography: {}'.format(cv_params['homography']),
                     'Scalar: {}'.format(cv_params['scalar']),
                     'Threshold: {}'.format(cv_params['threshold']),
                     ''
@@ -649,7 +660,7 @@ class Mosaic(object):
             tiles on the final mosaic
         """
         grid = self.grid
-        dim = self.grid
+        dim = self.dim
         w, h = self.size
 
         # Use the offset engine to allow users to set the offsets
@@ -745,14 +756,14 @@ class Mosaic(object):
             n_row += 1
 
         self._analyze_offsets(tiles)
-
+        '''
         # Score matches between tiles to find a well-positioned tile
-        # in the middle 50% of image 
+        # in the middle 50% of image
         root = None
         high_score = -1
-        min_col = 0.25 * n_col
+        min_col = 0 * n_col
         max_col = n_col - min_col
-        min_row = 0.25 * n_row
+        min_row = 0 * n_row
         max_row = n_col - min_row
         for tile in sorted(tiles):
             n_col, n_row = tiles[tile]['position']
@@ -763,49 +774,64 @@ class Mosaic(object):
                 except IndexError:
                     pass
                 else:
+                    #print '{}x{}: {}'.format(n_col, n_row, score)
                     if score > high_score:
                         root = tile
                         high_score = score
-
-        # Place tiles relative to the root tile from above
-        position = 'x'.join([str(n) for n in tiles[root]['position']])
-        coordinates = {position : (0,0)}
-        roots = [position]
-        while True:
-            neighbors = []
-            for root in roots:
-                n_col, n_row = [int(n) for n  in root.split('x')]
-                tile = tiles[self.grid[n_row][n_col]]
-                cprint(('Positioning tiles adjacent to'
-                       ' {}...').format(os.path.basename(root)), self.verbose)
-                offsets = tile['offsets']
-                offsets = [offset for offset in offsets if offset[2] >= 5]
-                for offset in offsets:
-                    direction = offset[0]
-                    dx, dy = offset[1]
-                    if direction == 'top':
-                        x, y = n_col, n_row-1
-                    elif direction == 'right':
-                        x, y = n_col+1, n_row
-                    elif direction == 'down':
-                        x, y = n_col, n_row+1
-                    elif direction == 'left':
-                        x, y = n_col-1, n_row
-                    try:
-                        self.grid[y][x]
-                    except IndexError:
-                        pass
-                    else:
-                        position = 'x'.join([str(n) for n in [x, y]])
+        '''
+        islands = {}
+        for tile in tiles:
+            key = copy(tile)
+            root = tile
+            # Place tiles relative to the root tile from above
+            position = 'x'.join([str(n) for n in tiles[root]['position']])
+            coordinates = {position : (0,0)}
+            roots = [position]
+            while True:
+                neighbors = []
+                for root in roots:
+                    n_col, n_row = [int(n) for n  in root.split('x')]
+                    tile = tiles[self.grid[n_row][n_col]]
+                    cprint(('Positioning tiles adjacent to'
+                           ' {}...').format(os.path.basename(root)),
+                                            self.verbose)
+                    offsets = tile['offsets']
+                    offsets = [offset for offset in offsets if offset[2] >= 5]
+                    for offset in offsets:
+                        direction = offset[0]
+                        dx, dy = offset[1]
+                        if direction == 'top':
+                            x, y = n_col, n_row-1
+                        elif direction == 'right':
+                            x, y = n_col+1, n_row
+                        elif direction == 'down':
+                            x, y = n_col, n_row+1
+                        elif direction == 'left':
+                            x, y = n_col-1, n_row
                         try:
-                            coordinates[position]
-                        except KeyError:
-                            x, y = coordinates[root]
-                            coordinates[position] = (x + dx, y + dy)
-                            neighbors.append(position)
-            roots = neighbors
-            if not len(roots):
+                            self.grid[y][x]
+                        except IndexError:
+                            pass
+                        else:
+                            position = 'x'.join([str(n) for n in [x, y]])
+                            try:
+                                coordinates[position]
+                            except KeyError:
+                                x, y = coordinates[root]
+                                coordinates[position] = (x + dx, y + dy)
+                                neighbors.append(position)
+                roots = neighbors
+                if not len(roots):
+                    break
+            islands[key] = coordinates
+        # Identify largest island
+        n = max([len(islands[key]) for key in islands])
+        for key in sorted(islands):
+            if len(islands[key]) == n:
+                coordinates = islands[key]
                 break
+        cprint('{} selected as root ({}/{} tiles represented)'.format(
+                    os.path.basename(key), n, len(tiles)))
         return self._normalize_coordinates(coordinates)
 
 
@@ -913,58 +939,62 @@ class Mosaic(object):
         x = []
         y = []
 
-        '''
         # Identify inliers using homography
-        if len(good) >= 5:
+        if kwargs['homography'] and len(good) >= 5:
             src_pts = np.float32([kp1[m.queryIdx].pt
                                   for m in good]).reshape(-1,1,2)
             dst_pts = np.float32([kp2[m.trainIdx].pt
                                   for m in good]).reshape(-1,1,2)
 
             M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-            inliers = mask.ravel().tolist()
+            try:
+                matchesMask = mask.ravel().tolist()
+            except AttributeError:
+                return (0, 0), 0, len(matches)
 
             # Use inlier list to determine offset
             i = 0
             while i < len(matchesMask):
                 c1 = good[i].queryIdx
                 c2 = good[i].trainIdx
-                x.append((kp1[c1].pt[0] - kp2[c2].pt[0]) / scalar)
-                y.append((kp1[c1].pt[1] - kp2[c2].pt[1]) / scalar)
+                x.append((kp1[c1].pt[0] - kp2[c2].pt[0]) / kwargs['scalar'])
+                y.append((kp1[c1].pt[1] - kp2[c2].pt[1]) / kwargs['scalar'])
                 i += 1
             x_avg = sum(x) / len(x)
             y_avg = sum(y) / len(y)
-            print fill(('Matched {} features in {} and {}'
-                        ' (t={})').format(len(x), fn1, fn2, dt),
-                       subsequent_indent='  ')
-            return (x_avg, y_avg), n, m
-        '''
-
-        # Identify inliers using a simple clustering approach
-        for m in good:
-            c1 = m.queryIdx
-            c2 = m.trainIdx
-            x.append((kp1[c1].pt[0] - kp2[c2].pt[0]) / kwargs['scalar'])
-            y.append((kp1[c1].pt[1] - kp2[c2].pt[1]) / kwargs['scalar'])
-        if len(x) and len(y):
-            groups = cluster(x, 2)
-            x_max = max([len(group) for group in groups])
-            group = [group for group in groups if len(group)==x_max][0]
-            x_avg = sum(group) / len(group)
-
-            groups = cluster(y, 2)
-            y_max = max([len(group) for group in groups])
-            group = [group for group in groups if len(group)==y_max][0]
-            y_avg = sum(group) / len(group)
 
             # Return coordinates, total size, and cluster size
             n = len(x)
-            m = min([x_max, y_max])
+            m = n #len(matches)
             dt = datetime.now() - start_time
-            cprint(('Matched {}/{} features in {} and {}'
-                    ' (t={})').format(m, n, fn1, fn2, dt), self.normal)
+            cprint(('Matched {} features in {} and {}'
+                    ' (t={})').format(n, fn1, fn2, dt), self.normal)
             return (x_avg, y_avg), n, m
-        return None
+        else:
+            # Identify inliers using a simple clustering approach
+            for m in good:
+                c1 = m.queryIdx
+                c2 = m.trainIdx
+                x.append((kp1[c1].pt[0] - kp2[c2].pt[0]) / kwargs['scalar'])
+                y.append((kp1[c1].pt[1] - kp2[c2].pt[1]) / kwargs['scalar'])
+            if len(x) and len(y):
+                groups = cluster(x, 2)
+                x_max = max([len(group) for group in groups])
+                group = [group for group in groups if len(group)==x_max][0]
+                x_avg = sum(group) / len(group)
+
+                groups = cluster(y, 2)
+                y_max = max([len(group) for group in groups])
+                group = [group for group in groups if len(group)==y_max][0]
+                y_avg = sum(group) / len(group)
+
+                # Return coordinates, total size, and cluster size
+                n = len(x)
+                m = min([x_max, y_max])
+                dt = datetime.now() - start_time
+                cprint(('Matched {}/{} features in {} and {}'
+                        ' (t={})').format(m, n, fn1, fn2, dt), self.normal)
+                return (x_avg, y_avg), n, m
 
 
 
@@ -985,7 +1015,10 @@ class Mosaic(object):
         #  1. Are there a large number of matches?
         #  2. Do most of these matches cluster in one group?
         #  Minima: 4/5, 4/6, 5/7, 5/8, 6/9, then >50% for 10+
-        pct_cluster = n_cluster / float(n_total)
+        try:
+            pct_cluster = n_cluster / float(n_total)
+        except ZeroDivisionError:
+            pct_cluster = 0
         return n_cluster * pct_cluster
 
 
@@ -1027,7 +1060,7 @@ class Mosaic(object):
 
 
 def mosey(path=None, param_file='params.p', skip_file=None,
-          create_jpeg=False, opencv=True, **kwargs):
+          create_jpeg=False, opencv=True, label=None, **kwargs):
     """Stitches a set of directories using one set of parameters
 
     Use this function to stitch derivatives from a master file
@@ -1049,6 +1082,7 @@ def mosey(path=None, param_file='params.p', skip_file=None,
             to matching tiles manually.
         create_jpeg (bool): specifies whether to create a
             half-size JPEG derivative of the final mosaic
+        label (str): name of the mosaic (typically the sample name)
         equalize_histogram (bool): specifies whether to equalize
             histogram before matching features (\*\*kwarg)
         matcher (str): name of feature-matching algoritm (\*\*kwarg)
@@ -1105,7 +1139,7 @@ def mosey(path=None, param_file='params.p', skip_file=None,
     coordinates = None
     for path in tilesets:
         cprint('New tileset: {}'.format(os.path.basename(path)))
-        mosaic = Mosaic(path, param_file, skip_file)
+        mosaic = Mosaic(path, param_file, skip_file, label)
         if not coordinates:
             coordinates = mosaic.prepare_mosaic(param_file, opencv, **kwargs)
         mosaic.create_mosaic(coordinates, create_jpeg=create_jpeg)
