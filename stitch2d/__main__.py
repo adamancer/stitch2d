@@ -37,6 +37,8 @@ def main(args=None):
                 matching. Does not affect tiles used in final mosaic.
             args['threshold']: threshold for Lowe test. Autostich
                 only
+            args['homography']: use homography alogithm. If not specified,
+                uses a simple clustering algorithm.
             args['equalize_histogram']: use equalize histogram to
                 increase contrast in source tiles
         """
@@ -126,6 +128,12 @@ def main(args=None):
         default=0.7,
         help=('threshold to use for ratio test. Lower values give'
               ' fewer but better matches.'))
+    mosaic_parser.add_argument(
+        '--homography',
+        action='store_true',
+        help=('specifies whether to use the OpenCV homography function'
+              ' to identifiy high-quality matches. A simple clustering'
+              ' algorithm is used if this parameter is not specified.'))
     mosaic_parser.add_argument(
         '--equalize_histogram',
         action='store_true',
