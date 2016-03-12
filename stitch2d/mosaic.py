@@ -635,7 +635,7 @@ class Mosaic(object):
             except:
                 print 'Failed to resize JPEG. Creating full-size instead.'
                 pass
-            mosaic.save(fp, 'JPEG')
+            mosaic.save(fp, 'JPEG', quality=85)
         cprint('Mosaic complete! (t={})'.format(datetime.now() - start_time))
         if path.rstrip('/').endswith('working'):
             try:
