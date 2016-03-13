@@ -65,7 +65,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'stitch2d'
-copyright = u'2015, adamancer'
+copyright = u'2016, adamancer'
 author = u'adamancer'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -375,3 +375,7 @@ epub_exclude_files = ['search.html']
 
 # If false, no index is generated.
 #epub_use_index = True
+
+# Change default sort order. Options are 'alphabetical', 'groupwise',
+# or 'bysource'.
+autodoc_member_order = 'bysource'
