@@ -1,3 +1,4 @@
+from .composite import composite
 from .helpers import cprint, prompt
 from .mosaic import Mosaic, mosey
 from .organizer import organize
