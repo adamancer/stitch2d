@@ -128,13 +128,12 @@ class Mosaic(object):
         self.fill = (0,0,0)
         self.text = tuple([(255 - x) for x in self.fill])
 
-        self.populate_tiles(path, '.tif', param_file, skip_file, label)
+        self.populate_tiles(path, param_file, skip_file, label)
 
 
 
 
-    def populate_tiles(self, path, ext, param_file=None,
-                       skip_file=None, label=None):
+    def populate_tiles(self, path, param_file=None, skip_file=None, label=None):
         """Test, characterize, sort and patch tiles from path
 
         Args:
@@ -148,8 +147,20 @@ class Mosaic(object):
         Returns:
             None
         """
+        # Get extension
+        for fn in os.listdir(path):
+            ext = os.path.splitext(fn)[1]
+            try:
+                IMAGE_MAP[ext.lower()]
+            except KeyError:
+                pass
+            else:
+                break
+        else:
+            raise Exception('Could not find a valid image file. Supported image'
+                            ' formats include {}'.format(sorted(IMAGE_MAP)))
         # Get descriptive name of tileset based on filename
-        self.filename = unicode(os.path.basename(path))
+        self.filename = unicode(os.path.splitext(os.path.basename(path))[0])
         try:
             name, kind = self.filename.rsplit('_', 1)
         except (KeyError, ValueError):
