@@ -58,17 +58,19 @@ IMAGE_TYPES = {
     'etd' : 'SEM, secondary electron',
     'sed' : 'SEM, secondary electron',
     'cl' : 'cathodoluminescence',
-    'Al' : 'SEM x-ray map, Al',
-    'Ca' : 'SEM x-ray map, Ca',
-    'Cr' : 'SEM x-ray map, Cr',
-    'Fe' : 'SEM x-ray map, Fe',
-    'K' : 'SEM x-ray map, K',
-    'Mg' : 'SEM x-ray map, Mg',
-    'Mn' : 'SEM x-ray map, Mn',
-    'Na' : 'SEM x-ray map, Na',
-    'S' : 'SEM x-ray map, S',
-    'Si' : 'SEM x-ray map, Si',
-    'Ti' : 'SEM x-ray map, Ti',
+    'al' : 'SEM x-ray map, Al',
+    'ca' : 'SEM x-ray map, Ca',
+    'cr' : 'SEM x-ray map, Cr',
+    'fe' : 'SEM x-ray map, Fe',
+    'k' : 'SEM x-ray map, K',
+    'mg' : 'SEM x-ray map, Mg',
+    'mn' : 'SEM x-ray map, Mn',
+    'na' : 'SEM x-ray map, Na',
+    'ni' : 'SEM x-ray map, Ni',
+    'o' : 'SEM x-ray map, O',
+    's' : 'SEM x-ray map, S',
+    'si' : 'SEM x-ray map, Si',
+    'ti' : 'SEM x-ray map, Ti'
 }
 
 
@@ -104,6 +106,8 @@ class Mosaic(object):
             to filepaths
         keypoints (dict): keypoints detected by OpenCV keyed to
             filepaths
+        fill (tuple): fill color of background. Default is black.
+        text (tuple): color of text. Default is inverse of fill.
     """
 
     def __init__(self, path, param_file=None, skip_file=None, label=None):
@@ -121,6 +125,8 @@ class Mosaic(object):
         self.basepath = os.path.dirname(__file__)
         self.normal = True
         self.verbose = False
+        self.fill = (0,0,0)
+        self.text = tuple([(255 - x) for x in self.fill])
 
         self.populate_tiles(path, '.tif', param_file, skip_file, label)
 
@@ -144,15 +150,23 @@ class Mosaic(object):
         """
         # Get descriptive name of tileset based on filename
         self.filename = unicode(os.path.basename(path))
-        if label is not None:
-            self.name = label
+        try:
+            name, kind = self.filename.rsplit('_', 1)
+        except (KeyError, ValueError):
+            if label is not None:
+                name = label
+            else:
+                name = self.filename
         else:
+            if label is not None:
+                name = label
             try:
-                self.name, image_type = self.filename.rsplit('_', 1)
-                self.name += ' ({})'.format(IMAGE_TYPES[image_type.lower()])
-            except (KeyError, ValueError):
-                # No valid suffix detected
-                self.name = self.filename
+                name += ' ({})'.format(IMAGE_TYPES[kind.lower()])
+            except:
+                # Identify element
+                if 1 <= len(kind) <= 2:
+                    name += ' ({})'.format(kind[0].upper() + kind[1:])
+        self.name = name
         cprint('Label is "{}"'.format(self.name), self.normal)
 
         path = self._test_file(path)
@@ -161,7 +175,13 @@ class Mosaic(object):
         tiles = glob.glob(os.path.join(path, '*' + ext))
         tiles = self._sort(tiles)  # calculates self.dim[0] if it can
         print 'The tileset contains {} tiles'.format(len(tiles))
-        self.size = Image.open(tiles[0]).size
+        # Set self.size to the LARGEST tile size. If multiple sizes are
+        # present, resize and manual options are forbidden.
+        sizes = [Image.open(tile).size for tile in tiles]
+        self.size = (max([size[0] for size in sizes]),
+                     max([size[1] for size in sizes]))
+        if len(set(sizes)) > 1:
+            print 'Tiles are not uniform in size!'
 
         try:
             params = pickle.load(open(param_file, 'rb'))
@@ -493,10 +513,10 @@ class Mosaic(object):
                 cprint('  Threshold:          {}'.format(
                             cv_params['threshold']))
                 cprint('Determining offset...')
-                coordinates = self._cv_coordinates(**kwargs)
+                posdata = self._cv_coordinates(**kwargs)
             else:
                 cprint('Setting offset...')
-                coordinates = self._set_coordinates()
+                posdata = self._set_coordinates()
             # Record job parameters to file
             params = [
                 self.filename,
@@ -517,6 +537,7 @@ class Mosaic(object):
                     'Threshold: {}'.format(cv_params['threshold']),
                     ''
                     ])
+            coordinates = posdata['coordinates']
             params.append('Tile coordinates:')
             keys = sorted(coordinates.keys(), key=lambda s:
                             'x'.join(['0'*(4-len(n))+n
@@ -528,7 +549,7 @@ class Mosaic(object):
                 f.write('\n'.join(params))
             # Pickle key parameters for re-use later
             params = {
-                'coordinates' : coordinates,
+                'posdata' : posdata,
                 'num_cols' : self.dim[0],
                 'mag' : self.mag,
                 'snake' : self.snake
@@ -537,17 +558,17 @@ class Mosaic(object):
                 pickle.dump(params, f)
         else:
             cprint('Found parameters file')
-            coordinates = params['coordinates']
-        return coordinates
+            posdata = params['posdata']
+        return posdata
 
 
 
 
-    def create_mosaic(self, coordinates, label=True, create_jpeg=True):
+    def create_mosaic(self, posdata, label=True, create_jpeg=True):
         """Draws mosaic based on the tile coordinates
 
         Args:
-            coordinates (dict): normalized coordinates keyed to filepaths
+            posdata (dict): positional data for tiles
             label (bool): specifies whether to include a label
                 at the bottom of the final mosaic
             create_jpeg (bool): specifies whether to create a
@@ -565,6 +586,9 @@ class Mosaic(object):
         #    between tiles.
         start_time = datetime.now()
 
+        coordinates = posdata['coordinates']
+        overlaps = posdata['overlaps']
+
         grid = self.grid
         w, h = self.size
 
@@ -579,34 +603,81 @@ class Mosaic(object):
                ' pixels'.format(mosaic_width, mosaic_height))
         # Create the mosaic
         cprint('Stitching mosaic...')
-        mosaic = Image.new('RGB', (mosaic_width, mosaic_height), (255,255,255))
+        # Group the tiles by size
+        tiles = []
         n_row = 0
         while n_row < len(grid):
             row = grid[n_row]
             n_col = 0
             while n_col < len(row):
-                position = 'x'.join([str(n) for n in [n_col, n_row]])
+                position = '{}x{}'.format(n_col, n_row)
                 try:
                     x, y = coordinates[position]
                 except KeyError:
-                    n_col += 1
-                    continue
+                    pass
                 else:
                     fp = grid[n_row][n_col]
                     path = os.path.dirname(fp)
-                # Encode the name
-                try:
-                    mosaic.paste(Image.open(fp.encode('cp1252')), (x, y))
-                except UnicodeDecodeError:
-                    mosaic.paste(Image.open(fp), (x, y))
-                except OSError:
-                    cprint('Encountered unreadable tiles but'
-                           ' could not fix them. Try installing'
-                           ' ImageMagick and re-running this'
-                           ' script.')
-                    sys.exit()
+                    size = Image.open(fp).size
+                    area = size[0] * size[1]
+                    tiles.append([area, fp, (x, y)])
                 n_col += 1
             n_row += 1
+        '''
+        # Normalize colors by comparing overlaps between adjacent tiles.
+        # Ignores sparse tiles, which are defined as those tiles with only
+        # two pixel colors.
+        means = {}
+        for overlap in overlaps:
+            t1, t2 = overlap
+            fp1 = grid[t1[0][1]][t1[0][0]]
+            try:
+                im1 = Image.open(fp1).crop(t1[1]).convert('RGB')
+            except IndexError:
+                continue
+            else:
+                data = np.array(im1)
+                red, green, blue = data.T
+                pixels = (red > 0) | (blue > 0) | (green > 0)
+                m1 = data[...,:][pixels.T].mean()
+            fp2 = grid[t2[0][1]][t2[0][0]]
+            try:
+                im2 = Image.open(fp2).crop(t2[1]).convert('RGB')
+            except IndexError:
+                continue
+            else:
+                data = np.array(im2)
+                red, green, blue = data.T
+                pixels = (red > 0) | (blue > 0) | (green > 0)
+                m2 = data[...,:][pixels.T].mean()
+
+            means.setdefault(fp1, []).append(m1 / m2)
+            means.setdefault(fp2, []).append(m2 / m1)
+            # Sanity check
+            if self.name.endswith('Fe)|'):
+                im1.show()
+                im2.show()
+                print np.array(im1).mean(), np.array(im2).mean()
+                raw_input()
+                im1.close()
+                im2.close()
+        '''
+        # Paste tiles. If tiles are not uniform in size, paste them in
+        # order of increasing size. This is intended to resolve an issue
+        # with artifacts when using by cropped images.
+        mosaic = Image.new('RGB', (mosaic_width, mosaic_height), self.fill)
+        for tile in tiles[::-1]:
+            area, fp, coordinates = tile
+            try:
+                mosaic.paste(Image.open(fp.encode('cp1252')), coordinates)
+            except UnicodeDecodeError:
+                mosaic.paste(Image.open(fp), coordinates)
+            except OSError:
+                cprint('Encountered unreadable tiles but'
+                       ' could not fix them. Try installing'
+                       ' ImageMagick and re-running this'
+                       ' script.')
+                sys.exit()
         # Add label
         if label:
             ttf = os.path.join(self.basepath, 'files', 'OpenSans-Regular.ttf')
@@ -622,7 +693,7 @@ class Mosaic(object):
             font = ImageFont.truetype(ttf, size)
             x = int(0.02 * mosaic_width)
             y = mosaic_height - int(label_height)
-            draw.text((x, y), text, (0, 0, 0), font=font)
+            draw.text((x, y), text, self.text, font=font)
         cprint('Saving as {}...'.format('TIFF'))
         #fp = os.path.join(self.path, os.pardir, self.filename + '.tif')
         fp = self.filename + '.tif'
@@ -635,7 +706,7 @@ class Mosaic(object):
             except:
                 print 'Failed to resize JPEG. Creating full-size instead.'
                 pass
-            mosaic.save(fp, 'JPEG', quality=85)
+            mosaic.save(fp, 'JPEG', quality=92)
         cprint('Mosaic complete! (t={})'.format(datetime.now() - start_time))
         if path.rstrip('/').endswith('working'):
             try:
@@ -694,6 +765,7 @@ class Mosaic(object):
                     coordinates[position] = (x, y)
                 n_col += 1
             n_row += 1
+        self.overlaps = []
         return self._normalize_coordinates(coordinates)
 
 
@@ -718,17 +790,19 @@ class Mosaic(object):
             tiles on the final mosaic
         """
         tiles = {}
+        overlaps = []
         n_row = 0
         while n_row < len(self.grid):
             row = self.grid[n_row]
             n_col = 0
             while n_col < len(row):
                 tile = row[n_col]
+                pos = (n_col, n_row)
                 try:
                     tiles[tile]
                 except KeyError:
                     tiles[tile] = {
-                        'position' : (n_col, n_row),
+                        'position' : pos,
                         'offsets' : [],
                         'coordinates' : None
                     }
@@ -742,6 +816,9 @@ class Mosaic(object):
                         tiles[tile]['offsets'].append(['left', xy, score])
                         tiles[neighbor]['offsets'].append(['right', nxy,
                                                            score])
+                        if score > 5:
+                            overlaps.append(self.col_compare(offset, pos,
+                                                             tile, neighbor))
                 if n_row:
                     neighbor = self.grid[n_row-1][n_col]
                     offset = self._cv_match(tile, neighbor, **kwargs)
@@ -752,9 +829,12 @@ class Mosaic(object):
                         tiles[tile]['offsets'].append(['top', xy, score])
                         tiles[neighbor]['offsets'].append(['down', nxy,
                                                            score])
+                        if score > 5:
+                            overlaps.append(self.row_compare(offset, pos,
+                                                             tile, neighbor))
                 n_col += 1
             n_row += 1
-
+        self.overlaps = overlaps
         self._analyze_offsets(tiles)
         '''
         # Score matches between tiles to find a well-positioned tile
@@ -801,11 +881,11 @@ class Mosaic(object):
                         direction = offset[0]
                         dx, dy = offset[1]
                         if direction == 'top':
-                            x, y = n_col, n_row-1
+                            x, y = n_col, n_row - 1
                         elif direction == 'right':
                             x, y = n_col+1, n_row
                         elif direction == 'down':
-                            x, y = n_col, n_row+1
+                            x, y = n_col, n_row + 1
                         elif direction == 'left':
                             x, y = n_col-1, n_row
                         try:
@@ -833,6 +913,50 @@ class Mosaic(object):
         cprint('{} selected as root ({}/{} tiles represented)'.format(
                     os.path.basename(key), n, len(tiles)))
         return self._normalize_coordinates(coordinates)
+
+
+    def row_compare(self, xy, tile, fp1, fp2):
+        im1 = Image.open(fp1)
+        w, h = im1.size
+        dx, dy = [abs(int(n)) for n in xy[0]]
+        x1, y1 = dx, 0
+        x2, y2 = w, h - dy
+        box1 = (x1, y1, x2, y2)
+
+        im2 = Image.open(fp2)
+        w, h = im2.size
+        x1, y1 = 0, dy
+        x2, y2 = w - dx, h
+        box2 = (x1, y1, x2, y2)
+
+        neighbor = tile[0], tile[1] - 1
+        #print 'row_compare:', tile, neighbor
+        #print fp1, self.grid[tile[1]][tile[0]]
+        #print fp2, self.grid[neighbor[1]][neighbor[0]]
+        #raw_input()
+        return ((tile, box1), (neighbor, box2))
+
+
+    def col_compare(self, xy, tile, fp1, fp2):
+        im1 = Image.open(fp1)
+        w, h = im1.size
+        dx, dy = [abs(int(n)) for n in xy[0]]
+        x1, y1 = 0, 0
+        x2, y2 = w - dx, h - dy
+        box1 = (x1, y1, x2, y2)
+
+        im2 = Image.open(fp2)
+        w, h = im2.size
+        x1, y1 = dx, dy
+        x2, y2 = w, h
+        box2 = (x1, y1, x2, y2)
+
+        neighbor = tile[0] - 1, tile[1]
+        #print 'col_compare:', tile, neighbor
+        #print fp1, self.grid[tile[1]][tile[0]]
+        #print fp2, self.grid[neighbor[1]][neighbor[0]]
+        #raw_input()
+        return ((tile, box1), (neighbor, box2))
 
 
 
@@ -876,8 +1000,9 @@ class Mosaic(object):
                 img = cv2.imread(fp, 0)
                 if kwargs['scalar'] < 1:
                     h, w = [int(n*kwargs['scalar']) for n in img.shape]
-                    cprint('OpenCV: cv2.resize()', self.verbose)
-                    img = cv2.resize(img, (w, h))
+                    if h and w:
+                        cprint('OpenCV: cv2.resize()', self.verbose)
+                        img = cv2.resize(img, (w, h))
                 if kwargs['equalize_histogram']:
                     cprint('OpenCV: cv2.equalizeHist()', self.verbose)
                     img = cv2.equalizeHist(img)
@@ -1054,7 +1179,7 @@ class Mosaic(object):
             x, y = coordinates[tile]
             coordinates[tile] = int(x - x_min), int(y - y_min)
 
-        return coordinates
+        return {'coordinates': coordinates, 'overlaps': self.overlaps}
 
 
 
@@ -1136,13 +1261,14 @@ def mosey(path=None, param_file='params.p', skip_file=None,
             skip_file = skip_file[0]
             cprint('Using list of skipped tiles'
                    ' from {}'.format(skip_file))
-    coordinates = None
+    positions = None
     for path in tilesets:
         cprint('New tileset: {}'.format(os.path.basename(path)))
+        # Check for element in foldername
         mosaic = Mosaic(path, param_file, skip_file, label)
-        if not coordinates:
-            coordinates = mosaic.prepare_mosaic(param_file, opencv, **kwargs)
-        mosaic.create_mosaic(coordinates, create_jpeg=create_jpeg)
+        if not positions:
+            positions = mosaic.prepare_mosaic(param_file, opencv, **kwargs)
+        mosaic.create_mosaic(positions, create_jpeg=create_jpeg)
     # Remove parameters file
     try:
         os.remove(param_file)
