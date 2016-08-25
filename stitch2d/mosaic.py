@@ -484,7 +484,6 @@ class Mosaic(object):
             kwargs: see :py:func:`~Stitch2D.Mosaic.mosey`
                 for additional keywords
 
-
         Returns:
             A dict of coordinates keyed to filepath
         """
@@ -511,10 +510,7 @@ class Mosaic(object):
                 }
                 cv_params = {}
                 for key in defaults:
-                    try:
-                        cv_params[key] = kwargs[key]
-                    except KeyError:
-                        cv_params[key] = defaults[key]
+                    cv_params[key] = kwargs.get(key, defaults[key])
                 cprint('  Equalize histogram: {}'.format(
                             cv_params['equalize_histogram']))
                 cprint('  Matcher:            {}'.format(cv_params['matcher']))
@@ -524,7 +520,7 @@ class Mosaic(object):
                 cprint('  Threshold:          {}'.format(
                             cv_params['threshold']))
                 cprint('Determining offset...')
-                posdata = self._cv_coordinates(**kwargs)
+                posdata = self._cv_coordinates(**cv_params)
             else:
                 cprint('Setting offset...')
                 posdata = self._set_coordinates()
