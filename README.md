@@ -80,8 +80,8 @@ The following arguments can be used to tweak the behavior of OpenCV:
 *  **-threshold**: The threshold for the Lowe test. Must be a decimal
    between 0 and 1; the default value is 0.7. Lower values give fewer but
    better matches.
-*  **--snake**: Specifies whether tiles are arranged in a snake pattern. If
-   not provided, the user will be prompted for this information.
+*  **--raster**, **--snake**: Specifies whether tiles are rastered or snaked.
+   If neither of these arguments is provided, the user will be prompted for this information.
 *  **--equalize_histogram**: Specifies whether to try to equalize histogram
    in the source image. This can increase contrast and produce better matches,
    but increases computation time.

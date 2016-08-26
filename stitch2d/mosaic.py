@@ -198,8 +198,8 @@ class Mosaic(object):
         try:
             params = serialize.load(open(param_file, 'rb'))
         except (IOError, TypeError):
-            cprint('Set tilset parameters:')
             review = num_cols is None or snake is None
+            cprint('Set tileset parameters:')
             if not self.dim[0] and num_cols is None:
                 num_cols = int(prompt(' Number of columns:', '^\d+$'))
             elif num_cols is None:
@@ -226,18 +226,14 @@ class Mosaic(object):
         if self.snake:
             self.grid = self._desnake(self.grid, self.snake)
 
-        # Try again if review fails
-        if review:
-            # Review parameters
-            cprint('Review parameters for your mosaic:')
-            cprint(' Dimensions:     {}x{}'.format(self.dim[0], self.dim[1]))
-            #cprint(' Magnification:  {}'.format(self.mag))
-            cprint(' Snake :         {}'.format(self.snake))
-            if review and not prompt('Confirm', {'y' : True, 'n' : False}):
-                self.populate_tiles(path, ext, param_file, skip_file, label)
-            else:
-                self.keypoints = {}
-                return self
+        # Review parameters, allowing user to try again if the parameters
+        # are not suitable
+        cprint('Mosaic parameters:')
+        cprint(' Dimensions:     {}x{}'.format(self.dim[0], self.dim[1]))
+        #cprint(' Magnification:  {}'.format(self.mag))
+        cprint(' Snake :         {}'.format(self.snake))
+        if review and not prompt('Confirm', {'y' : True, 'n' : False}):
+            self.populate_tiles(path, ext, param_file, skip_file, label)
         else:
             self.keypoints = {}
             return self
