@@ -19,7 +19,7 @@ import sys
 import time
 import Tkinter
 import tkFileDialog
-import cPickle as pickle
+import json as serialize
 from copy import copy
 from datetime import datetime
 from textwrap import fill
@@ -99,7 +99,8 @@ class Mosaic(object):
         text (tuple): color of text. Default is inverse of fill.
     """
 
-    def __init__(self, path, param_file=None, skip_file=None, label=None):
+    def __init__(self, path, param_file=None, skip_file=None, label=None,
+                 **kwargs):
         """Initialize new Tileset
 
         The heavy lifting is done by
@@ -117,12 +118,15 @@ class Mosaic(object):
         self.fill = (0,0,0)
         self.text = tuple([(255 - x) for x in self.fill])
 
-        self.populate_tiles(path, param_file, skip_file, label)
+        num_cols = kwargs.get('num_cols')
+        snake = kwargs.get('snake')
+        self.populate_tiles(path, param_file, skip_file, label, num_cols, snake)
 
 
 
 
-    def populate_tiles(self, path, param_file=None, skip_file=None, label=None):
+    def populate_tiles(self, path, param_file=None, skip_file=None, label=None,
+                       num_cols=None, snake=None):
         """Test, characterize, sort and patch tiles from path
 
         Args:
@@ -132,6 +136,8 @@ class Mosaic(object):
             skip_file (str): filepath to text file containing the
                 list of skipped indices
             label (str): name of the mosaic (typically the sample name)
+            num_columns (int): number of columns in the mosaic
+            snake (bool): specifies whether mosaic is a snake pattern
 
         Returns:
             None
@@ -146,8 +152,14 @@ class Mosaic(object):
             else:
                 break
         else:
-            raise Exception('Could not find a valid image file. Supported image'
-                            ' formats include {}'.format(sorted(IMAGE_MAP)))
+            msg = (u'Could not find a valid tileset in {} Supported image'
+                    ' formats include {}').format(path, sorted(IMAGE_MAP))
+            if param_file is None:
+                raise Exception(msg)
+            else:
+                print u'Warning: {}'.format(msg)
+                self.grid = {}
+                return self
         # Get descriptive name of tileset based on filename
         self.filename = unicode(os.path.splitext(os.path.basename(path))[0])
         try:
@@ -184,23 +196,25 @@ class Mosaic(object):
             print 'Tiles are not uniform in size!'
 
         try:
-            params = pickle.load(open(param_file, 'rb'))
+            params = serialize.load(open(param_file, 'rb'))
         except (IOError, TypeError):
             cprint('Set tilset parameters:')
-            if not self.dim[0]:
+            review = num_cols is None or snake is None
+            if not self.dim[0] and num_cols is None:
                 num_cols = int(prompt(' Number of columns:', '^\d+$'))
-            else:
+            elif num_cols is None:
                 num_cols = self.dim[0]
                 cprint((' Number of columns: {} (determined from'
                         ' filenames)').format(num_cols))
-            self.mag = float(prompt(' Magnification:', '^\d+(\.\d)?$'))
-            self.snake = prompt(' Snake pattern?', {'y' : True, 'n' : False})
-            review = True
+            #self.mag = float(prompt(' Magnification:', '^\d+(\.\d)?$'))
+            if snake is None:
+                snake = prompt(' Snake pattern?', {'y' : True, 'n' : False})
+            self.snake = snake
         else:
-            num_cols = params['num_cols']
-            self.mag = params['mag']
-            self.snake = params['snake']
             review = False
+            num_cols = params['num_cols']
+            #self.mag = params['mag']
+            self.snake = params['snake']
 
         skiplist = []
         if skip_file is not None:
@@ -217,7 +231,7 @@ class Mosaic(object):
             # Review parameters
             cprint('Review parameters for your mosaic:')
             cprint(' Dimensions:     {}x{}'.format(self.dim[0], self.dim[1]))
-            cprint(' Magnification:  {}'.format(self.mag))
+            #cprint(' Magnification:  {}'.format(self.mag))
             cprint(' Snake :         {}'.format(self.snake))
             if review and not prompt('Confirm', {'y' : True, 'n' : False}):
                 self.populate_tiles(path, ext, param_file, skip_file, label)
@@ -485,9 +499,8 @@ class Mosaic(object):
                 opencv = False
 
         try:
-            params = pickle.load(open(param_file, 'rb'))
+            params = serialize.load(open(param_file, 'rb'))
         except (IOError, TypeError):
-            cprint(' Autostitch:     {}'.format(opencv))
             if opencv:
                 cprint('Using OpenCV to stitch mosaic')
                 defaults = {
@@ -518,7 +531,7 @@ class Mosaic(object):
                 self.filename,
                 '-' * len(self.filename),
                 'Dimensions: {}x{}'.format(self.dim[0], self.dim[1]),
-                'Magnification: {}'.format(self.mag),
+                #'Magnification: {}'.format(self.mag),
                 'Snake: {}'.format(self.snake),
                 ''
             ]
@@ -547,11 +560,11 @@ class Mosaic(object):
             params = {
                 'posdata' : posdata,
                 'num_cols' : self.dim[0],
-                'mag' : self.mag,
+                #'mag' : self.mag,
                 'snake' : self.snake
             }
             with open(param_file, 'wb') as f:
-                pickle.dump(params, f)
+                serialize.dump(params, f)
         else:
             cprint('Found parameters file')
             posdata = params['posdata']
@@ -856,7 +869,7 @@ class Mosaic(object):
                         high_score = score
         '''
         islands = {}
-        for tile in tiles:
+        for tile in [tile for tile in tiles if tile]:
             key = copy(tile)
             root = tile
             # Place tiles relative to the root tile from above
@@ -1181,7 +1194,7 @@ class Mosaic(object):
 
 
 
-def mosey(path=None, param_file='params.p', skip_file=None,
+def mosey(path=None, param_file='params.json', skip_file=None,
           create_jpeg=False, opencv=True, label=None, **kwargs):
     """Stitches a set of directories using one set of parameters
 
@@ -1261,10 +1274,16 @@ def mosey(path=None, param_file='params.p', skip_file=None,
     for path in tilesets:
         cprint('New tileset: {}'.format(os.path.basename(path)))
         # Check for element in foldername
-        mosaic = Mosaic(path, param_file, skip_file, label)
-        if not positions:
-            positions = mosaic.prepare_mosaic(param_file, opencv, **kwargs)
-        mosaic.create_mosaic(positions, create_jpeg=create_jpeg)
+        num_cols = kwargs.get('num_cols')
+        snake = kwargs.get('snake')
+        mosaic = Mosaic(path, param_file, skip_file, label,
+                        num_cols=num_cols, snake=snake)
+        if mosaic.grid:
+            if not positions:
+                positions = mosaic.prepare_mosaic(param_file, opencv, **kwargs)
+            mosaic.create_mosaic(positions, create_jpeg=create_jpeg)
+        else:
+            print u'Skipped {}'.format(path)
     # Remove parameters file
     try:
         os.remove(param_file)

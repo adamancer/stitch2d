@@ -107,6 +107,11 @@ def main(args=None):
         type=str,
         help='the path to the mosaics directory')
     mosaic_parser.add_argument(
+        '-numcols',
+        dest = 'num_cols',
+        type=int,
+        help='number of columns in the mosaic')
+    mosaic_parser.add_argument(
         '-matcher',
         dest = 'matcher',
         type=str,
@@ -131,6 +136,12 @@ def main(args=None):
         default=0.7,
         help=('threshold to use for ratio test. Lower values give'
               ' fewer but better matches.'))
+    mosaic_parser.add_argument(
+        '--snake',
+        action='store_const',
+        const=True,
+        default=None,
+        help=('specifies whether tiles are arranged in a snake pattern'))
     mosaic_parser.add_argument(
         '--homography',
         action='store_true',

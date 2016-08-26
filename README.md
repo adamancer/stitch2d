@@ -68,6 +68,8 @@ Optional arguments include:
 
 The following arguments can be used to tweak the behavior of OpenCV:
 
+*  **-numcols**: Specifies the number of columns in the mosaic. If not provided,
+   the user will be prompted for this information.
 *  **-matcher**: Specifies the algorithm used for feature matching. Must
    be either "brute-force" or "flann"; "brute-force" is the default. **Note:**
    The flann matcher has proven unreliable and is currently disabled.
@@ -78,11 +80,15 @@ The following arguments can be used to tweak the behavior of OpenCV:
 *  **-threshold**: The threshold for the Lowe test. Must be a decimal
    between 0 and 1; the default value is 0.7. Lower values give fewer but
    better matches.
+*  **--snake**: Specifies whether tiles are arranged in a snake pattern. If
+   not provided, the user will be prompted for this information.
 *  **--equalize_histogram**: Specifies whether to try to equalize histogram
    in the source image. This can increase contrast and produce better matches,
    but increases computation time.
 
-More information about these values can be found in the [OpenCV-Python
+These keywords can also be passed directly stitch2d.mosey().
+
+More information about these parameters can be found in the [OpenCV-Python
 tutorials](https://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_feature2d/py_table_of_contents_feature2d/py_table_of_contents_feature2d.html).
 
 **select**
