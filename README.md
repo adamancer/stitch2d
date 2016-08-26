@@ -28,6 +28,9 @@ in Fiji.
 Using the Command Line Tools
 ----------------------------
 
+ ⇩ [Example tileset for mosaic](http://mineralsciences.si.edu/share/tiles.zip)
+ (18.5 MB; 8 columns, 5x magnification, snaked)
+
 Begin by collecting the tilesets you want to stitch as subdirectories
 in a single folder. Each subdirectory will be processed using the same
 parameters, so offsets for the different tilesets should be very similar.
@@ -46,12 +49,11 @@ From the command line:
 stitch2d mosaic
 ```
 
-That command is perfectly adequate, but you can also specify arguments to
-control how your tiles are stitched:
+That command should be perfectly adequate, but you can also specify arguments
+to control how your tiles are stitched:
 
 ```
-stitch2d mosaic -p /path/to/tiles -matcher brute-force \
-   -scalar 0.5 -threshold 0.7 --equalize_histogram --create_jpeg
+stitch2d mosaic -p tiles -matcher brute-force -scalar 0.5 -threshold 0.7 --equalize_histogram --create_jpeg
 ```
 
 Optional arguments include:
@@ -71,7 +73,7 @@ The following arguments can be used to tweak the behavior of OpenCV:
 *  **-scalar**: Specifies the amount by which to resize source tiles
    before attempting to match features. Must be a decimal between 0 and 1;
    the default value is 0.5. Smaller values are faster but potentially less
-   accurate. The mosaic itself will always use full-size tiles.
+   accurate. The mosaic itself will be made from the full-sized tiles.
 *  **-threshold**: The threshold for the Lowe test. Must be a decimal
    between 0 and 1; the default value is 0.7. Lower values give fewer but
    better matches.
