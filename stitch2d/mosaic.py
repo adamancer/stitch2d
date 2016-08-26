@@ -1016,7 +1016,8 @@ class Mosaic(object):
             return None
 
         if kwargs['matcher'] == 'flann':
-            # FLANN-based matching. Segfaults in Ubuntu :(.
+            # FLANN-based matching. Segfaults in Ubuntu 14.04, does not
+            # work with OpenCV 3.1.0 :(.
             FLANN_INDEX_KDTREE = 0
             index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
             search_params = dict(checks=50)

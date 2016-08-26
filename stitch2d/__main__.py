@@ -110,7 +110,10 @@ def main(args=None):
         '-matcher',
         dest = 'matcher',
         type=str,
-        choices=['brute-force', 'flann'],
+        # FIXME: The flann matcher is unreliable in Ubuntu and OpenCV 3.1.0.
+        # Removed for the time being, but should revisit sometime.
+        #choices=['brute-force', 'flann'],
+        choices=['brute-force'],
         default='brute-force',
         help='specifies algorithm to use for matching')
     mosaic_parser.add_argument(
