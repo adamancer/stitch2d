@@ -69,7 +69,8 @@ Optional arguments include:
 The following arguments can be used to tweak the behavior of OpenCV:
 
 *  **-matcher**: Specifies the algorithm used for feature matching. Must
-   be either "brute-force" or "flann"; "brute-force" is the default.
+   be either "brute-force" or "flann"; "brute-force" is the default. **Note:**
+   The flann matcher has proven unreliable and is currently disabled.
 *  **-scalar**: Specifies the amount by which to resize source tiles
    before attempting to match features. Must be a decimal between 0 and 1;
    the default value is 0.5. Smaller values are faster but potentially less
