@@ -76,17 +76,6 @@ IMAGE_TYPES = {
 
 
 
-class Counter(dict):
-
-    def add(self, key, val=1):
-        try:
-            self[key] += val
-        except KeyError:
-            self[key] = val
-
-
-
-
 class Mosaic(object):
     """Contains functions and metadata needed to create a mosaic from a tilset
 
@@ -1229,18 +1218,17 @@ def mosey(path=None, param_file='params.p', skip_file=None,
         root = Tkinter.Tk()
         root.withdraw()
         title = 'Please select the directory containing your tile sets:'
-        initial = os.path.expanduser('~')
-        kwargs['path'] = tkFileDialog.askdirectory(parent=root, title=title,
-                                                   initialdir=initial)
+        path = tkFileDialog.askdirectory(parent=root, title=title,
+                                         initialdir=os.getcwd())
+        kwargs['path'] = path
     # Check for tiles. If none found, try the parent directory.
     try:
         tilesets = [os.path.join(path, dn) for dn in os.listdir(path)
                     if os.path.isdir(os.path.join(path, dn))
                     and not dn == 'skipped']
-    except:
-        cprint('Invalid path : {}. Exiting.'.format(path))
-        sys.exit()
-    if not len(tilesets):
+    except TypeError:
+        raise Exception('No filepath provided! Exiting')
+    if not tilesets:
         cprint('No subdirectories found in {}. Processing'
                ' main directory instead.'.format(path))
         tilesets = [path]
