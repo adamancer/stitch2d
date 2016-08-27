@@ -23,21 +23,24 @@ The options available in this module are fairly basic. For more complex
 tilesets, consider using the [image stitching plugin](http://fiji.sc/Image_Stitching)
 in Fiji.
 
-[Documentation](http://stitch2d.readthedocs.org/en/latest/stitch2d.html) is available at ReadTheDocs.
+[Documentation](http://stitch2d.readthedocs.org/en/latest/stitch2d.html) is
+available at ReadTheDocs.
 
 Using the Command Line Tools
 ----------------------------
 
  ⇩ [Example tileset for mosaic](http://mineralsciences.si.edu/share/tiles.zip)
- (18.5 MB; 8 columns, 5x magnification, snaked)
+ (18.5 MB; 8 columns, snaked)
 
 Begin by collecting the tilesets you want to stitch as subdirectories
-in a single folder. Each subdirectory will be processed using the same
-parameters, so offsets for the different tilesets should be very similar.
+in a single folder. Each subdirectory processed with a single command
+will be processed use the same parameters, so offsets for the different
+tilesets should be very similar.
 
-There are three subcommands that can be accessed from the command line:
-mosaic, organize, and select. In addition to the text below, information
-about of these commands can be accessed from the command line using -h.
+There are four subcommands that can be accessed from the command line:
+mosaic, composite, organize, and select. In addition to the text below,
+information about of these commands can be accessed from the command
+line using -h.
 
 **mosaic**
 
@@ -53,7 +56,7 @@ That command should be perfectly adequate, but you can also specify arguments
 to control how your tiles are stitched:
 
 ```
-stitch2d mosaic -p tiles -matcher brute-force -scalar 0.5 -threshold 0.7 --equalize_histogram --create_jpeg
+stitch2d mosaic -path tiles -matcher brute-force -scalar 0.5 -threshold 0.7 --equalize_histogram --create_jpeg
 ```
 
 Optional arguments include:
@@ -61,6 +64,11 @@ Optional arguments include:
 *  **-path**: Specifies to path to the source tiles. This argument works in
    all subcommands except organize. If no path is specified, you will be
    prompted to select a directory.
+*  **-numcols**: Specifies the number of columns in the mosaic. If not provided,
+   the user will be prompted for this information.
+*  **--raster**, **--snake**: Specifies whether tileset is rastered or snaked.
+   If neither argument is provided, the user will be prompted for this
+   information.
 *  **--create_jpeg**: Specifies whether to create a half-size JPEG derivative
    of the final mosaic.
 *  **--manual**: Force manual selection of offsets. The script will
@@ -68,8 +76,6 @@ Optional arguments include:
 
 The following arguments can be used to tweak the behavior of OpenCV:
 
-*  **-numcols**: Specifies the number of columns in the mosaic. If not provided,
-   the user will be prompted for this information.
 *  **-matcher**: Specifies the algorithm used for feature matching. Must
    be either "brute-force" or "flann"; "brute-force" is the default. **Note:**
    The flann matcher has proven unreliable and is currently disabled.
@@ -80,8 +86,6 @@ The following arguments can be used to tweak the behavior of OpenCV:
 *  **-threshold**: The threshold for the Lowe test. Must be a decimal
    between 0 and 1; the default value is 0.7. Lower values give fewer but
    better matches.
-*  **--raster**, **--snake**: Specifies whether tiles are rastered or snaked.
-   If neither of these arguments is provided, the user will be prompted for this information.
 *  **--equalize_histogram**: Specifies whether to try to equalize histogram
    in the source image. This can increase contrast and produce better matches,
    but increases computation time.
@@ -90,6 +94,23 @@ These keywords can also be passed directly stitch2d.mosey().
 
 More information about these parameters can be found in the [OpenCV-Python
 tutorials](https://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_feature2d/py_table_of_contents_feature2d/py_table_of_contents_feature2d.html).
+
+**composite**
+
+Makes a composite image by overlaying SEM element maps with data for different
+elements.
+
+```
+stitch2d composite -path mosaics -red Fe -green Mg -blue Al
+```
+
+The composite commands accepts the **-path** and **-label** keywords as
+defined above for mosaic. Additional arguments are used to map colors to
+elements. Valid color arguments include red, green, blue, cyan, magenta,
+yellow, black, and white.
+
+The composite function uses the filename to determine which element is
+pictured, so the filename of each mosaic should end with \_{element}.
 
 **select**
 

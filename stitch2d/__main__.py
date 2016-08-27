@@ -25,7 +25,7 @@ def main(args=None):
 
 
 
-    def mosaic_callback(args):
+    def _mosaic_callback(args):
         """Calls mosey function from mosaic.py
 
         Args:
@@ -51,7 +51,7 @@ def main(args=None):
 
 
 
-    def organize_callback(args):
+    def _organize_callback(args):
         """Calls organizer function from organize.py
 
         Args:
@@ -65,11 +65,44 @@ def main(args=None):
 
 
 
-    def select_callback(args):
+    def _select_callback(args):
+        """Calls select function from selector.py
+
+        Args:
+            args['path'] (str): path to folder containing tiles
+
+        """
         args = vars(args)
         selector = stitch2d.Selector(args['path'])
         params = selector.get_job_settings()
         selector.select(*params)
+
+
+
+
+    def _composite_callback(args):
+        """Calls composite function from composite.py
+
+        All the args except path are color=element mappings.
+
+        Args:
+            args['path'] (str): path to folder containing the images to
+                composite
+        """
+        args = vars(args)
+        try:
+            path = args.pop('path')
+        except KeyError:
+            path = None
+        try:
+            label = args.pop('label')
+        except KeyError:
+            label = None
+        for arg in args.keys():
+            if args[arg] is None:
+                del args[arg]
+        del args['func']
+        stitch2d.composite(path, label, **args)
 
 
 
@@ -127,9 +160,8 @@ def main(args=None):
         dest='scalar',
         type=I,
         default=0.5,
-        help=('amount to scale images before'
-              ' matching. Smaller images are'
-              ' faster but less accurate.'))
+        help=('amount to scale images before matching. Smaller'
+              ' images are faster but less accurate.'))
     mosaic_parser.add_argument(
         '-threshold',
         dest='threshold',
@@ -181,7 +213,7 @@ def main(args=None):
         default=None,
         help=('specifies whether tiles are snaked. The snake'
               ' and raster arguments are mutually exclusive.'))
-    mosaic_parser.set_defaults(func=mosaic_callback)
+    mosaic_parser.set_defaults(func=_mosaic_callback)
 
     # Organize subcommand
     organize_parser = subparsers.add_parser(
@@ -197,7 +229,7 @@ def main(args=None):
         type=str,
         nargs='?',
         help='the path to the directory in which to store the organized maps')
-    organize_parser.set_defaults(func=organize_callback)
+    organize_parser.set_defaults(func=_organize_callback)
 
     # Select subcommand
     select_parser = subparsers.add_parser(
@@ -208,7 +240,29 @@ def main(args=None):
         dest='path',
         type=str,
         help='the path to the mosaics directory')
-    select_parser.set_defaults(func=select_callback)
+    select_parser.set_defaults(func=_select_callback)
+
+    # Composite subcommand
+    composite_parser = subparsers.add_parser(
+        'composite',
+        help='Create a composite of multiple SEM element maps')
+    composite_parser.add_argument(
+        '-path',
+        dest='path',
+        type=str,
+        help='the path containing the images to composite')
+    composite_parser.add_argument(
+        '-label',
+        dest='label',
+        type=str,
+        help='the name of the composite (typically the sample name)')
+    for color in sorted(stitch2d.COLORS):
+        composite_parser.add_argument(
+            '-{}'.format(color),
+            dest=color,
+            type=str,
+            help='the element to be colored {} in the composite'.format(color))
+    composite_parser.set_defaults(func=_composite_callback)
 
     args = parser.parse_args(args)
     args.func(args)

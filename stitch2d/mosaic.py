@@ -131,7 +131,6 @@ class Mosaic(object):
 
         Args:
             path (str): filepath to tiles
-            ext (str): extension on image files
             param_file (str): filepath to parameters file
             skip_file (str): filepath to text file containing the
                 list of skipped indices
@@ -143,21 +142,12 @@ class Mosaic(object):
             None
         """
         # Get extension
-        for fn in os.listdir(path):
-            ext = os.path.splitext(fn)[1]
-            try:
-                IMAGE_MAP[ext.lower()]
-            except KeyError:
-                pass
-            else:
-                break
-        else:
-            msg = (u'Could not find a valid tileset in {} Supported image'
-                    ' formats include {}').format(path, sorted(IMAGE_MAP))
+        try:
+            ext = _guess_extension(path)
+        except:
             if param_file is None:
-                raise Exception(msg)
+                raise
             else:
-                print u'Warning: {}'.format(msg)
                 self.grid = {}
                 return self
         # Get descriptive name of tileset based on filename
@@ -1225,11 +1215,7 @@ def mosey(path=None, param_file='params.json', skip_file=None,
         None
     """
     if not path:
-        root = Tkinter.Tk()
-        root.withdraw()
-        title = 'Please select the directory containing your tile sets:'
-        path = tkFileDialog.askdirectory(parent=root, title=title,
-                                         initialdir=os.getcwd())
+        path = _select_folder()
         kwargs['path'] = path
     # Check for tiles. If none found, try the parent directory.
     try:
@@ -1285,3 +1271,42 @@ def mosey(path=None, param_file='params.json', skip_file=None,
         os.remove(param_file)
     except OSError:
         pass
+
+
+def _select_folder(title=('Please select the directory'
+                          ' containing your tilesets:')):
+    """Select directory using GUI
+
+    Args:
+        title (str): title of GUI window
+
+    Returns:
+        Path as to directory as string
+    """
+    root = Tkinter.Tk()
+    root.withdraw()
+    return tkFileDialog.askdirectory(parent=root, title=title,
+                                     initialdir=os.getcwd())
+
+
+def _guess_extension(path):
+    """Determines extension based on files in path
+
+    Args:
+        path (str): path to folder containing tiles
+
+    Returns:
+        File extension of first valid file type
+    """
+    for fn in os.listdir(path):
+        ext = os.path.splitext(fn)[1]
+        try:
+            IMAGE_MAP[ext.lower()]
+        except KeyError:
+            pass
+        else:
+            return ext
+    else:
+        msg = (u'Could not find a valid tileset in {} Supported image'
+                ' formats include {}').format(path, sorted(IMAGE_MAP))
+        raise Exception(msg)

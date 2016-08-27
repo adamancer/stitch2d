@@ -4,7 +4,9 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
+from .mosaic import _guess_extension, _select_folder
 from .organizer import _get_name
+
 
 
 COLORS = {
@@ -18,8 +20,17 @@ COLORS = {
     'white': (255, 255, 255),
 }
 
+
 def convert(from_color, to_color):
-    # Convert to_color to rgb if given as string
+    """Convert color name to rgb
+
+    Args:
+        from_color (str, tuple): the name or RGB representation of a color
+        to_color (str, tuple): the name or RGB representation of a color
+
+    Returns:
+        Tuple containing the converted color as RGB
+    """
     try:
         to_color = COLORS[to_color.lower()]
     except KeyError:
@@ -35,55 +46,18 @@ def convert(from_color, to_color):
     return rgb
 
 
-def rainbow():
-    src = 'blue'
-    im = Image.open('{}.tif'.format(src))
-    im = im.convert('RGB')
-    colors = [t[1] for t in im.getcolors()]
-
-    data = np.array(im)
-    red, green, blue = data.T
-
-    for color in COLORS:
-        _data = data.copy()
-        for r, g, b in set(colors):
-            pixels = (red == r) & (blue == b) & (green == g)
-            _data[...,:][pixels.T] = convert((r, g, b), color)
-        Image.fromarray(_data).save('_{}.tif'.format(color))
-
-    src = 'green'
-    im = Image.open('{}.tif'.format(src))
-    im = im.convert('RGB')
-
-    src = 'blue'
-    _im = Image.open('_{}.tif'.format(src))
-    _im.convert('RGB')
-
-    print list(_im.getdata()) == list(im.getdata())
 
 
-def normalize():
-    im = Image.open(fp).convert('RGB')
-    data = np.array(im)
-    data = data.astype(np.uint16)
-    red, green, blue = data.T
-    colors = [t[1] for t in im.getcolors()]
-    # Determine color
-    for color in [color for color in colors if set(color) > 1]:
-        mask = tuple([255 if ch else 0 for color in colors])
-        for key, val in COLORS.iteritems():
-            if mask == val:
-                color = key
-                break
-
-
-def composite(path, colormap):
+def composite(path=None, label=None, **colormap):
     """Create a composite using a set of images and colors
 
     Args:
-        path (str): path to images
-        colormap (dict): maps colors to elements
+        path (str): path to set of images to be composited
+        label (str): label for composite image
+        **colormap: keyword arguments of the form color=element
     """
+    if path is None:
+        path = _select_folder()
     ordered = ('red', 'green', 'blue', 'cyan', 'magenta', 'yellow')
     colors = [color for color in ordered if color in colormap]
     colors = '-'.join(colors)
@@ -92,8 +66,9 @@ def composite(path, colormap):
     ttf = os.path.join(os.path.dirname(__file__), 'files',
                        'OpenSans-Regular.ttf')
     # Map images in source folder to the appropriate element
+    ext = _guess_extension(path)
     elementmap = {}
-    for fp in glob.glob(os.path.join(path, '*.tif')):
+    for fp in glob.glob(os.path.join(path, '*' + ext)):
         fn = os.path.basename(fp)
         try:
             element = _get_name(fn).split('_').pop()
@@ -156,7 +131,7 @@ def composite(path, colormap):
         font = ImageFont.truetype(ttf, size)
         draw.text((x, y), element, (255, 255, 255), font=font)
     # Draw label
-    base = os.path.dirname(fp)
+    label = os.path.dirname(fp) if label is not None else label
     text = '{} (multielement X-ray map)'.format(base)
     x = int(0.02 * im.size[0])
     y = im.size[1] - legend_height - label_height
@@ -165,5 +140,3 @@ def composite(path, colormap):
     elements = [colormap[color] for color in ordered if color in colormap]
     print ' Saving TIFF...'
     im.save('{}_{}.tif'.format(base, ''.join(elements)))
-    print ' Saving JPEG 2000...'
-    im.save('{}_{}.jp2'.format(base, ''.join(elements)))
