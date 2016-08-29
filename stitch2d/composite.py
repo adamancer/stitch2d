@@ -22,10 +22,12 @@ COLORS = {
 
 
 def convert(from_color, to_color):
-    """Convert color name to rgb
+    """Converts color name to rgb
 
     Args:
-        from_color (str, tuple): the name or RGB representation of a color
+        from_color (str, tuple): the name or RGB representation of a color.
+            The color must be one of red, green, blue, cyan, magenta, yellow,
+            black, or white.
         to_color (str, tuple): the name or RGB representation of a color
 
     Returns:
@@ -35,9 +37,9 @@ def convert(from_color, to_color):
         to_color = COLORS[to_color.lower()]
     except KeyError:
         pass
-    # Channels in the from_color must covary
+    # The source color must be a tint/shade of one of the eight colors
     if len(set(from_color)) == 3:
-        return
+        raise Exception('Color must be one of {}'.format(sorted(colors)))
     try:
         val = [ch for ch in from_color if ch].pop()
     except IndexError:
@@ -49,7 +51,7 @@ def convert(from_color, to_color):
 
 
 def composite(path=None, label=None, jpeg=False, **colormap):
-    """Create a composite using a set of images and colors
+    """Creates a composite element map
 
     Args:
         path (str): path to set of images to be composited

@@ -7,7 +7,14 @@ stitch2d.mosaic module
 .. automodule:: stitch2d.mosaic
     :members:
     :undoc-members:
-    :exclude-members: Counter
+    :show-inheritance:
+
+stitch2d.composite module
+------------------------
+
+.. automodule:: stitch2d.composite
+    :members:
+    :undoc-members:
     :show-inheritance:
 
 stitch2d.organizer module
