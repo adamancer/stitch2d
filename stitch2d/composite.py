@@ -48,12 +48,13 @@ def convert(from_color, to_color):
 
 
 
-def composite(path=None, label=None, **colormap):
+def composite(path=None, label=None, jpeg=False, **colormap):
     """Create a composite using a set of images and colors
 
     Args:
         path (str): path to set of images to be composited
         label (str): label for composite image
+        jpeg (bool): specifies whether to create a JPEG 2000 derivative
         **colormap: keyword arguments of the form color=element
     """
     if path is None:
@@ -131,12 +132,16 @@ def composite(path=None, label=None, **colormap):
         font = ImageFont.truetype(ttf, size)
         draw.text((x, y), element, (255, 255, 255), font=font)
     # Draw label
-    label = os.path.dirname(fp) if label is not None else label
-    text = '{} (multielement X-ray map)'.format(base)
+    name = os.path.basename(os.path.dirname(fp))
+    label = name if label is None else label
+    text = '{} (multielement X-ray map)'.format(label)
     x = int(0.02 * im.size[0])
     y = im.size[1] - legend_height - label_height
     draw.text((x, y), text, 'white', font=font)
     # Set filename
     elements = [colormap[color] for color in ordered if color in colormap]
     print ' Saving TIFF...'
-    im.save('{}_{}.tif'.format(base, ''.join(elements)))
+    im.save('{}_{}.tif'.format(os.path.dirname(fp), ''.join(elements)))
+    if jpeg:
+        print ' Saving JPEG 2000...'
+        im.save('{}_{}.jp2'.format(name, ''.join(elements)))

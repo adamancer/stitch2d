@@ -90,19 +90,19 @@ def main(args=None):
                 composite
         """
         args = vars(args)
-        try:
-            path = args.pop('path')
-        except KeyError:
-            path = None
-        try:
-            label = args.pop('label')
-        except KeyError:
-            label = None
+        for color in stitch2d.COLORS:
+            if args[color] is not None:
+                break
+        else:
+            parser.error('Must specify at least one color')
+        path = args.pop('path')
+        label = args.pop('label')
+        jpeg = args.pop('create_jpeg')
         for arg in args.keys():
             if args[arg] is None:
                 del args[arg]
         del args['func']
-        stitch2d.composite(path, label, **args)
+        stitch2d.composite(path, label, jpeg, **args)
 
 
 
@@ -256,6 +256,13 @@ def main(args=None):
         dest='label',
         type=str,
         help='the name of the composite (typically the sample name)')
+    composite_parser.add_argument(
+        '--create_jpeg',
+        action='store_const',
+        const=True,
+        default=False,
+        help='specifies whether to create a JPEG 2000 derivative'
+             ' the composite')
     for color in sorted(stitch2d.COLORS):
         composite_parser.add_argument(
             '-{}'.format(color),

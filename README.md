@@ -35,7 +35,7 @@ Using the Command Line Tools
 Begin by collecting the tilesets you want to stitch as subdirectories
 in a single folder. Each subdirectory processed with a single command
 will be processed use the same parameters, so offsets for the different
-tilesets should be very similar.
+tilesets should be very identical.
 
 There are four subcommands that can be accessed from the command line:
 mosaic, composite, organize, and select. In addition to the text below,
@@ -52,11 +52,10 @@ From the command line:
 stitch2d mosaic
 ```
 
-That command should be perfectly adequate, but you can also specify arguments
-to control how your tiles are stitched:
+You can specify additional keyword arguments to control how tiles are stitched:
 
 ```
-stitch2d mosaic -path tiles -matcher brute-force -scalar 0.5 -threshold 0.7 --equalize_histogram --create_jpeg
+stitch2d mosaic -path /path/to/tiles -matcher brute-force -scalar 0.5 -threshold 0.7 --equalize_histogram --create_jpeg
 ```
 
 Optional arguments include:
@@ -92,22 +91,23 @@ The following arguments can be used to tweak the behavior of OpenCV:
 
 These keywords can also be passed directly stitch2d.mosey().
 
-More information about these parameters can be found in the [OpenCV-Python
+More information about OpenCV parameters can be found in the [OpenCV-Python
 tutorials](https://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_feature2d/py_table_of_contents_feature2d/py_table_of_contents_feature2d.html).
 
 **composite**
 
-Makes a composite image by overlaying SEM element maps with data for different
-elements.
+Makes a composite image by recoloring and overlaying SEM element maps with
+data for different elements.
 
 ```
-stitch2d composite -path mosaics -red Fe -green Mg -blue Al
+stitch2d composite -path /path/to/mosaics -red Fe -green Mg -blue Al
 ```
 
-The composite commands accepts the **-path** and **-label** keywords as
-defined above for mosaic. Additional arguments are used to map colors to
-elements. Valid color arguments include red, green, blue, cyan, magenta,
-yellow, black, and white.
+The composite commands accepts the **-path**, **-label**, and **-create_jpeg** arguments as defined above for mosaic. Additional arguments are used to map
+colors to elements. Valid color arguments include **-red**, **-green**,
+**-blue**, **-cyan**, **-magenta**, **-yellow**, **-black**, and **-white**.
+Pixels in the images being composited should be tints/shades of these eight
+colors.
 
 The composite function uses the filename to determine which element is
 pictured, so the filename of each mosaic should end with \_{element}.
@@ -134,7 +134,7 @@ stitch2d select
 
 Click the tiles you'd like to remove, or click a darkened tile to reinstate it.
 As with the mosaic script, the select command accepts an optional path argument
-using the -p flag.
+using the -path flag.
 
 **organize**
 
