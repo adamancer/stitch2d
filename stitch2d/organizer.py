@@ -62,13 +62,13 @@ def organize(src_dir=None, dst_dir=None):
     if not src_dir:
         title = ('Please select the directory containing the element maps:')
         src_dir = tkFileDialog.askdirectory(parent=root, title=title,
-                                            initialdir=initial)
+                                            initialdir=os.getcwd())
     print 'Source directory is {}'.format(src_dir)
     if not dst_dir:
         title = ('Please select the destination'
                  ' for the organized element maps:')
         dst_dir = tkFileDialog.askdirectory(parent=root, title=title,
-                                            initialdir=initial)
+                                            initialdir=os.getcwd())
     print 'Destination directory is {}'.format(dst_dir)
     total = 0
     moved = 0
@@ -81,18 +81,18 @@ def organize(src_dir=None, dst_dir=None):
             total += 1
             # Create directory if neccesary
             try:
-                os.mkdir(os.path.join(dst_dir, dn))
+                os.makedirs(os.path.join(dst_dir, dn))
             except OSError:
                 pass
             else:
                 print 'Creating directory {}...'.format(dn)
             # Move file into proper directory
-            src = os.path.join(src_dir, fn)
-            dst = os.path.join(dst_dir, dn, fn)
+            src = os.path.join(fp)
+            dst = os.path.join(dst_dir, dn)
             try:
                 open(dst, 'rb')
             except IOError:
-                print 'Copying {}...'.format(os.path.basename(dst))
+                print 'Copying {}...'.format(fn)
                 try:
                     shutil.copy2(src, dst)
                 except IOError:

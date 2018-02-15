@@ -1,4 +1,4 @@
-from .composite import composite, COLORS
+from .composite import brighten, composite, COLORS
 from .helpers import cprint, prompt
 from .mosaic import Mosaic, mosey
 from .organizer import organize

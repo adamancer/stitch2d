@@ -9,6 +9,12 @@ from textwrap import fill
 
 
 
+IMAGE_MAP = {
+    '.jpg' : 'JPEG',
+    '.tif' : 'TIFF',
+    '.tiff' : 'TIFF'
+}
+
 
 def cluster(data, maxgap):
     '''Group data such that successive elements differ by no more than maxgap
@@ -187,3 +193,50 @@ def mandolin(lst, n):
         leftovers = lst[-remainder:]
         mandolined.append(leftovers + [''] * (n - len(leftovers)))
     return mandolined
+
+
+
+
+def _select_folder(title=('Please select the directory'
+                          ' containing your tilesets:')):
+    """Select directory using GUI
+
+    Args:
+        title (str): title of GUI window
+
+    Returns:
+        Path as to directory as string
+    """
+    root = Tkinter.Tk()
+    root.withdraw()
+    return tkFileDialog.askdirectory(parent=root, title=title,
+                                     initialdir=os.getcwd())
+
+
+
+
+def _guess_extension(path):
+    """Determines extension based on files in path
+
+    Args:
+        path (str): path to folder containing tiles
+
+    Returns:
+        File extension of first valid file type
+    """
+    for fn in os.listdir(path):
+        ext = os.path.splitext(fn)[1]
+        try:
+            IMAGE_MAP[ext.lower()]
+        except KeyError:
+            pass
+        else:
+            return ext
+    else:
+        msg = (u'Could not find a valid tileset in {} Supported image'
+                ' formats include {}').format(path, sorted(IMAGE_MAP))
+        raise Exception(msg)
+
+
+def _get_coordinates(fn):
+    return tuple([int(c) for c in fn.split('@')[1].split(']')[0].split(' ')])
