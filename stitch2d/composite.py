@@ -1,10 +1,10 @@
 import glob
 import os
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 import numpy as np
 
-from .mosaic import _guess_extension, _select_folder
+from .helpers import _guess_extension, _select_folder
 from .organizer import _get_name
 
 
@@ -21,7 +21,24 @@ COLORS = {
 }
 
 
-def convert(from_color, to_color):
+
+def brighten(val, minval):
+    """Brightens image based on minval
+
+    Args:
+        val (int): value of a single channel
+        minval (int): minimum channel value in the converted image. Used to
+            brighten or darken the composite.
+
+    Returns:
+        New channel value as int
+    """
+    return minval + (255 - minval) * val / 255
+
+
+
+
+def convert(from_color, to_color, minval=None):
     """Converts color name to rgb
 
     Args:
@@ -29,6 +46,8 @@ def convert(from_color, to_color):
             The color must be one of red, green, blue, cyan, magenta, yellow,
             black, or white.
         to_color (str, tuple): the name or RGB representation of a color
+        minval (int): minimum channel value in the converted image. Used to
+            brighten or darken the composite.
 
     Returns:
         Tuple containing the converted color as RGB
@@ -44,13 +63,19 @@ def convert(from_color, to_color):
         val = [ch for ch in from_color if ch].pop()
     except IndexError:
         val = 0
-    rgb = tuple([val if ch else 0 for ch in to_color])
+    # Adjust the intensity of the color based on minval
+    if minval is not None:
+        if not 0 <= minval <= 255:
+            raise Exception('minval must be between 0 and 255')
+        val = minval + (255 - minval) * val / 255
+    rgb = tuple([int(val) if ch else 0 for ch in to_color])
     return rgb
 
 
 
 
-def composite(path=None, label=None, jpeg=False, **colormap):
+def composite(path=None, output='.', label=None, jpeg=False, minval=None,
+              blur=0, **colormap):
     """Creates a composite element map
 
     Args:
@@ -83,28 +108,46 @@ def composite(path=None, label=None, jpeg=False, **colormap):
         elementmap[element] = fp
     # Recolor the images
     legend = []
-    for color in colormap:
-        element = colormap[color]
+    for to_color in colormap:
+        element = colormap[to_color]
+        print ' Processing {}...'.format(element)
         fp = elementmap[element]
         im = Image.open(fp).convert('RGB')
         data = np.array(im)
         data = data.astype(np.uint16)
-        red, green, blue = data.T
-        colors = [t[1] for t in im.getcolors(512)]
-        # Ignore grays when recoloring if color is not white
-        if color != 'white':
-            colors = [_color for _color in colors if len(set(_color)) > 1]
-        for r, g, b in set(colors):
-            pixels = (red == r) & (blue == b) & (green == g)
-            data[...,:][pixels.T] = convert((r, g, b), color)
+        # Identify from_color
+        colors = [tuple([255 if ch else 0 for ch in color])
+                  for color in [t[1] for t in im.getcolors(512)]
+                  if not len(set(color)) == 1]
+        if len(set(colors)) > 1:
+            raise Exception('Color error: {}'.format(set(colors)))
+        # Populate color channels based on intensities in from_color
+        from_color = colors[0]
+        if from_color != COLORS[to_color]:
+            from_channel = [i for i, val in enumerate(from_color) if val][0]
+            for i, ch in enumerate(COLORS[to_color]):
+                if ch and i != from_channel:
+                    data[...,i] = data[...,from_channel]
+            # Zero any channel not found in to_color
+            for i, ch in enumerate(from_color):
+                if ch and not COLORS[to_color][i]:
+                    data[...,i] = 0
+        # Apply modified image to the composite
         try:
             composite = np.add(composite, data)
         except NameError:
             composite = data
         # Add file to legend
-        legend.append((element, color))
+        legend.append((element, to_color))
     legend.sort(key=lambda row:ordered.index(row[1]))
     w, h = im.size
+    # Normalize brightness if minval is specified
+    composite[composite < 10] = 0
+    if minval:
+        print ' Brightening image...'
+        composite[composite > 0] = np.apply_along_axis(brighten, 0,
+                                                       composite[composite > 0],
+                                                       minval=minval)
     # Set pixel value to 255
     composite[composite > 255] = 255
     composite = Image.fromarray(composite.astype(np.uint8))
@@ -113,6 +156,9 @@ def composite(path=None, label=None, jpeg=False, **colormap):
     legend_height = int(label_height * (len(legend) - 1))
     im = Image.new('RGB', (im.size[0], im.size[1] + legend_height), 'black')
     im.paste(composite, (0, 0))
+    if blur:
+        print ' Blurring image...'
+        im = im.filter(ImageFilter.GaussianBlur(radius=blur))
     # Draw legend
     draw = ImageDraw.Draw(im)
     x1, y1 = (0, im.size[1])
@@ -134,16 +180,17 @@ def composite(path=None, label=None, jpeg=False, **colormap):
         font = ImageFont.truetype(ttf, size)
         draw.text((x, y), element, (255, 255, 255), font=font)
     # Draw label
-    name = os.path.basename(os.path.dirname(fp))
-    label = name if label is None else label
+    label = os.path.basename(os.path.dirname(fp)) if label is None else label
     text = '{} (multielement X-ray map)'.format(label)
     x = int(0.02 * im.size[0])
     y = im.size[1] - legend_height - label_height
     draw.text((x, y), text, 'white', font=font)
     # Set filename
     elements = [colormap[color] for color in ordered if color in colormap]
+    fn = label.replace(' ', '_')
     print ' Saving TIFF...'
-    im.save('{}_{}.tif'.format(os.path.dirname(fp), ''.join(elements)))
+    fp = os.path.join(output, '{}_{}.tif'.format(fn, ''.join(elements)))
+    im.save(fp)
     if jpeg:
         print ' Saving JPEG 2000...'
-        im.save('{}_{}.jp2'.format(name, ''.join(elements)))
+        im.save(os.path.splitext(fp)[0] + '.jp2')

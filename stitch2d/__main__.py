@@ -96,13 +96,15 @@ def main(args=None):
         else:
             parser.error('Must specify at least one color')
         path = args.pop('path')
+        output = args.pop('output')
         label = args.pop('label')
         jpeg = args.pop('create_jpeg')
+        minval = args.pop('minval')
         for arg in args.keys():
             if args[arg] is None:
                 del args[arg]
         del args['func']
-        stitch2d.composite(path, label, jpeg, **args)
+        stitch2d.composite(path, output, label, jpeg, minval, **args)
 
 
 
@@ -140,10 +142,21 @@ def main(args=None):
         type=str,
         help='the path to the mosaics directory')
     mosaic_parser.add_argument(
+        '-output',
+        dest='output',
+        type=str,
+        default='.',
+        help='the path to which to save the finished mosaics')
+    mosaic_parser.add_argument(
         '-numcols',
         dest='num_cols',
         type=int,
         help='number of columns in the mosaic')
+    mosaic_parser.add_argument(
+        '-minval',
+        dest='minval',
+        type=int,
+        help='the minimum color channel value in the final mosaic')
     mosaic_parser.add_argument(
         '-matcher',
         dest='matcher',
@@ -169,6 +182,16 @@ def main(args=None):
         default=0.7,
         help=('threshold to use for ratio test. Lower values give'
               ' fewer but better matches.'))
+    mosaic_parser.add_argument(
+        '-blur',
+        dest='blur',
+        type=int,
+        default=0,
+        help='radius for Gaussian blur applied to tiles before mosaicking')
+    mosaic_parser.add_argument(
+        '--smooth',
+        action='store_true',
+        help=('specifies whether to try to smooth boundaries between tiles'))
     mosaic_parser.add_argument(
         '--homography',
         action='store_true',
@@ -252,10 +275,28 @@ def main(args=None):
         type=str,
         help='the path containing the images to composite')
     composite_parser.add_argument(
+        '-output',
+        dest='output',
+        type=str,
+        default='.',
+        help='the path to which to save the finished composites')
+    composite_parser.add_argument(
         '-label',
         dest='label',
         type=str,
         help='the name of the composite (typically the sample name)')
+    composite_parser.add_argument(
+        '-minval',
+        dest='minval',
+        type=int,
+        help='the minimum color channel value in the final composite.'
+             ' Higher values produce brighter images with less contrast.')
+    composite_parser.add_argument(
+        '-blur',
+        dest='blur',
+        type=int,
+        default=0,
+        help='radius for Gaussian blur')
     composite_parser.add_argument(
         '--create_jpeg',
         action='store_const',
