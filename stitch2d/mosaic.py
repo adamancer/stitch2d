@@ -29,19 +29,15 @@ try:
 except ImportError:
     pass
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from .helpers import cluster, cprint, mandolin, mogrify, prompt
+from .composite import brighten
+from .helpers import (cluster, cprint, mandolin, mogrify,
+                      prompt, _guess_extension, _select_folder, IMAGE_MAP)
 from .offset import OffsetEngine
 
 
 
-
-IMAGE_MAP = {
-    '.jpg' : 'JPEG',
-    '.tif' : 'TIFF',
-    '.tiff' : 'TIFF'
-}
 
 IMAGE_TYPES = {
     'unspecified' : 'unspecified image type',
@@ -99,12 +95,12 @@ class Mosaic(object):
         text (tuple): color of text. Default is inverse of fill.
     """
 
-    def __init__(self, path, param_file=None, skip_file=None, label=None,
-                 **kwargs):
+    def __init__(self, path, output='.', param_file=None, skip_file=None,
+                 label=None, **kwargs):
         """Initialize new Tileset
 
         The heavy lifting is done by
-        :py:funct:`~Stitch2d.Mosaic.populate_tiles()`,
+        :py:func:`~Stitch2d.Mosaic.populate_tiles()`,
         which populates and processes the tileset.
 
         Args:
@@ -113,20 +109,24 @@ class Mosaic(object):
             skip_file (str): path to file containing indices of skipped tiles
         """
         self.basepath = os.path.dirname(__file__)
+        try:
+            os.makedirs(output)
+        except OSError:
+            pass
+
+        self.output = output
         self.normal = True
         self.verbose = False
         self.fill = (0,0,0)
         self.text = tuple([(255 - x) for x in self.fill])
 
-        num_cols = kwargs.get('num_cols')
-        snake = kwargs.get('snake')
-        self.populate_tiles(path, param_file, skip_file, label, num_cols, snake)
+        self.populate_tiles(path, param_file, skip_file, label, **kwargs)
 
 
 
 
-    def populate_tiles(self, path, param_file=None, skip_file=None, label=None,
-                       num_cols=None, snake=None):
+    def populate_tiles(self, path, param_file=None, skip_file=None,
+                       label=None, **kwargs):
         """Test, characterize, sort and patch tiles from path
 
         Args:
@@ -137,6 +137,8 @@ class Mosaic(object):
             label (str): name of the mosaic (typically the sample name)
             num_columns (int): number of columns in the mosaic
             snake (bool): specifies whether mosaic is a snake pattern
+            smooth (bool): specifies whether to try to smooth out boundaries
+                between images
 
         Returns:
             None
@@ -144,32 +146,35 @@ class Mosaic(object):
         # Get extension
         try:
             ext = _guess_extension(path)
-        except:
+        except KeyError:
             if param_file is None:
                 raise
             else:
                 self.grid = {}
                 return self
+
         # Get descriptive name of tileset based on filename
-        self.filename = unicode(os.path.splitext(os.path.basename(path))[0])
+        fn = os.path.splitext(os.path.basename(path))[0]
+        name = label if label is not None else fn
         try:
-            name, kind = self.filename.rsplit('_', 1)
-        except (KeyError, ValueError):
-            if label is not None:
-                name = label
-            else:
-                name = self.filename
+            base, kind = fn.rsplit('_', 1)
+        except ValueError:
+            kind = None
+            blurb = None
         else:
-            if label is not None:
-                name = label
-            try:
-                name += ' ({})'.format(IMAGE_TYPES[kind.lower()])
-            except:
-                # Identify element
-                if 1 <= len(kind) <= 2:
-                    name += ' ({})'.format(kind[0].upper() + kind[1:])
+            while kind and kind[0].isdigit():
+                kind = kind[1:]
+            blurb = IMAGE_TYPES.get(kind.lower())
+            if blurb is None and 1 <= len(kind) <= 2:
+                blurb = kind.lower().capitalize()
+        fn = name.replace(' ', '_') if label is not None else fn
+        if kind is not None:
+            fn += '_{}'.format(kind)
+        if blurb is not None:
+            name += ' ({})'.format(blurb)
+        self.filename = fn.replace('(', '').replace(')', '').replace('.', 'pt')
         self.name = name
-        cprint('Label is "{}"'.format(self.name), self.normal)
+        cprint('{} => {}'.format(self.name, self.filename), self.normal)
 
         path = self._test_file(path)
         self.dim = (0, 0)
@@ -179,7 +184,7 @@ class Mosaic(object):
         print 'The tileset contains {} tiles'.format(len(tiles))
         # Set self.size to the LARGEST tile size. If multiple sizes are
         # present, resize and manual options are forbidden.
-        sizes = [Image.open(tile).size for tile in tiles]
+        sizes = [Image.open(tile).size for tile in tiles[:5]]
         self.size = (max([size[0] for size in sizes]),
                      max([size[1] for size in sizes]))
         if len(set(sizes)) > 1:
@@ -188,11 +193,19 @@ class Mosaic(object):
         try:
             params = serialize.load(open(param_file, 'rb'))
         except (IOError, TypeError):
+            # Get parameters from kwarg
+            minval = kwargs.get('minval')
+            num_cols = kwargs.get('num_cols')
+            snake = kwargs.get('snake')
+            smooth = kwargs.get('smooth')
+            blur = kwargs.get('blur', 0)
+            # Prompt for missing params and assign to attributes
             review = num_cols is None or snake is None
             cprint('Set tileset parameters:')
             if not self.dim[0] and num_cols is None:
                 num_cols = int(prompt(' Number of columns:', '^\d+$'))
             elif num_cols is None:
+                review = snake is None
                 num_cols = self.dim[0]
                 cprint((' Number of columns: {} (determined from'
                         ' filenames)').format(num_cols))
@@ -200,16 +213,42 @@ class Mosaic(object):
             if snake is None:
                 snake = prompt(' Snake pattern?', {'y' : True, 'n' : False})
             self.snake = snake
+            self.smooth = True if smooth else False
+            self.minval = minval if minval is not None else 0
+            self.blur = blur
         else:
             review = False
             num_cols = params['num_cols']
-            #self.mag = params['mag']
+            self.minval = params['minval']
             self.snake = params['snake']
+            self.smooth = params['smooth']
+            self.blur = params['blur']
 
         skiplist = []
         if skip_file is not None:
             skiplist = self._handle_skipped(skip_file)
         tiles = self._patch(tiles, skiplist)
+
+        # Pad the grid
+        rows = {}
+        for tile in tiles:
+            from .helpers import _get_coordinates
+            try:
+                row, col = _get_coordinates(tile)
+            except IndexError:
+                row = len(rows)
+                if len(rows.get(row, [])) == num_cols:
+                    row += 1
+            rows.setdefault(row, []).append(tile)
+        max_tiles = max([len(row) for row in rows.values()])
+        longest_row = [len(row) for i, row in rows.iteritems() if len(row) == max_tiles][0]
+        longest_row = 0
+        for row, cols in rows.iteritems():
+            while len(cols) < longest_row:
+                print longest_row
+                cols.append(None)
+        #print longest_row
+        #raw_input()
 
         self.grid = mandolin(tiles, num_cols)
         self.dim = (num_cols, len(self.grid))
@@ -221,7 +260,10 @@ class Mosaic(object):
         cprint('Mosaic parameters:')
         cprint(' Dimensions:     {}x{}'.format(self.dim[0], self.dim[1]))
         #cprint(' Magnification:  {}'.format(self.mag))
-        cprint(' Snake :         {}'.format(self.snake))
+        cprint(' Snake:          {}'.format(self.snake))
+        cprint(' Smooth:         {}'.format(self.smooth))
+        cprint(' Blur radius:    {}'.format(self.blur))
+        cprint(' Minimum pixel:  {}'.format(self.minval))
         if review and not prompt('Confirm', {'y' : True, 'n' : False}):
             self.populate_tiles(path, ext, param_file, skip_file, label)
         else:
@@ -337,6 +379,8 @@ class Mosaic(object):
             self.dim = (num_cols, self.dim[1])
         # Create tiles and rows
         tiles = [temp[key] for key in sorted(temp.keys())]
+        #tiles.sort()
+        for tile in tiles: print tile
         return tiles
 
 
@@ -519,6 +563,9 @@ class Mosaic(object):
                 'Dimensions: {}x{}'.format(self.dim[0], self.dim[1]),
                 #'Magnification: {}'.format(self.mag),
                 'Snake: {}'.format(self.snake),
+                'Smooth: {}'.format(self.smooth),
+                'Blur radius: {}'.format(self.blur),
+                'Minimum pixel: {}'.format(self.minval),
                 ''
             ]
             if opencv:
@@ -539,15 +586,18 @@ class Mosaic(object):
                             for n in s.split('x')][::-1]))
             for key in keys:
                 params.append('{}: {}'.format(key, coordinates[key]))
-            fp = self.filename + '.txt'
+            fp = os.path.join(self.output, self.filename + '.txt')
             with open(fp, 'wb') as f:
                 f.write('\n'.join(params))
             # Pickle key parameters for re-use later
             params = {
                 'posdata' : posdata,
-                'num_cols' : self.dim[0],
+                'minval': self.minval,
+                'num_cols': self.dim[0],
                 #'mag' : self.mag,
-                'snake' : self.snake
+                'snake': self.snake,
+                'smooth': self.smooth,
+                'blur': self.blur
             }
             with open(param_file, 'wb') as f:
                 serialize.dump(params, f)
@@ -618,45 +668,60 @@ class Mosaic(object):
                     tiles.append([area, fp, (x, y)])
                 n_col += 1
             n_row += 1
-        '''
-        # Normalize colors by comparing overlaps between adjacent tiles.
-        # Ignores sparse tiles, which are defined as those tiles with only
-        # two pixel colors.
-        means = {}
-        for overlap in overlaps:
-            t1, t2 = overlap
-            fp1 = grid[t1[0][1]][t1[0][0]]
-            try:
-                im1 = Image.open(fp1).crop(t1[1]).convert('RGB')
-            except IndexError:
-                continue
-            else:
-                data = np.array(im1)
-                red, green, blue = data.T
-                pixels = (red > 0) | (blue > 0) | (green > 0)
-                m1 = data[...,:][pixels.T].mean()
-            fp2 = grid[t2[0][1]][t2[0][0]]
-            try:
-                im2 = Image.open(fp2).crop(t2[1]).convert('RGB')
-            except IndexError:
-                continue
-            else:
-                data = np.array(im2)
-                red, green, blue = data.T
-                pixels = (red > 0) | (blue > 0) | (green > 0)
-                m2 = data[...,:][pixels.T].mean()
-
-            means.setdefault(fp1, []).append(m1 / m2)
-            means.setdefault(fp2, []).append(m2 / m1)
-            # Sanity check
-            if self.name.endswith('Fe)|'):
-                im1.show()
-                im2.show()
-                print np.array(im1).mean(), np.array(im2).mean()
-                raw_input()
-                im1.close()
-                im2.close()
-        '''
+        # Create a lookup from overlaps
+        lookup = {}
+        for t1, t2 in overlaps:
+            data = {tuple(t1[0]): t1[1], tuple(t2[0]): t2[1]}
+            for key in data:
+                lookup.setdefault(key, []).append(data)
+        # Normalize colors by comparing overlaps between adjacent tiles,
+        # building out from the middle of the mosaic to minimize edge effects
+        if self.smooth:
+            scalars = {}
+            found = []
+            n_row = len(grid) / 2
+            n_col = len(row) / 2
+            roots = [(n_col, n_row)]  # pos in overlap is like this I guess
+            while True:
+                neighbors = []
+                for root in roots:
+                    found.append(root)
+                    scalars.setdefault(root, 1.)
+                    n_col, n_row = root
+                    fp_root = grid[n_row][n_col]
+                    im_root = Image.open(fp_root).convert('RGB')
+                    if self.blur:
+                        im_root = im_root.filter(
+                            ImageFilter.GaussianBlur(self.blur)
+                            )
+                    # Scale neighbors
+                    for neighbor in lookup.get(root, []):
+                        coords = [coords for coords in neighbor.keys()
+                                  if coords != root][0]
+                        dim1 = neighbor[root]
+                        dim2 = neighbor[coords]
+                        n_col, n_row = coords
+                        try:
+                            fp2 = grid[n_row][n_col]
+                        except (IndexError, KeyError):
+                            pass
+                        else:
+                            im2 = Image.open(fp2).crop(dim2).convert('RGB')
+                            if self.blur:
+                                im2 = im2.filter(
+                                    ImageFilter.GaussianBlur(self.blur)
+                                    )
+                            m2 = np.array(im2).mean() * scalars.get(fp2, 1.)
+                            # Crop root tile to dimensions of overlap
+                            im1 = im_root.crop(dim1)
+                            m1 = np.array(im1).mean() * scalars.get(fp_root, 1.)
+                            # Set scalar for neighbor, if not already set
+                            scalars.setdefault(fp2, m1 / m2)
+                            if not coords in found:
+                                neighbors.append(coords)
+                roots = list(set(neighbors))
+                if not roots:
+                    break
         # Paste tiles. If tiles are not uniform in size, paste them in
         # order of increasing size. This is intended to resolve an issue
         # with artifacts when using by cropped images.
@@ -664,15 +729,29 @@ class Mosaic(object):
         for tile in tiles[::-1]:
             area, fp, coordinates = tile
             try:
-                mosaic.paste(Image.open(fp.encode('cp1252')), coordinates)
+                im = Image.open(fp.encode('cp1252')).convert('RGB')
             except UnicodeDecodeError:
-                mosaic.paste(Image.open(fp), coordinates)
+                im = Image.open(fp).convert('RGB')
             except OSError:
                 cprint('Encountered unreadable tiles but'
                        ' could not fix them. Try installing'
                        ' ImageMagick and re-running this'
                        ' script.')
                 sys.exit()
+            # Adjust colors if smooth is specified
+            if self.blur:
+                im = im.filter(ImageFilter.GaussianBlur(self.blur))
+            if self.smooth or self.minval:
+                data = np.array(im).astype(np.float64)
+                if self.smooth:
+                    data[data > 0] *= scalars.get(fp, 1.)
+                if self.minval:
+                    data[data > 0] = np.apply_along_axis(brighten, 0,
+                                                         data[data > 0],
+                                                         minval=self.minval)
+                data[data > 255] = 255
+                im = Image.fromarray(data.astype(np.uint8))
+            mosaic.paste(im, coordinates)
         # Add label
         if label:
             ttf = os.path.join(self.basepath, 'files', 'OpenSans-Regular.ttf')
@@ -691,7 +770,7 @@ class Mosaic(object):
             draw.text((x, y), text, self.text, font=font)
         cprint('Saving as {}...'.format('TIFF'))
         #fp = os.path.join(self.path, os.pardir, self.filename + '.tif')
-        fp = self.filename + '.tif'
+        fp = os.path.join(self.output, self.filename + '.tif')
         mosaic.save(fp, 'TIFF')
         if create_jpeg:
             cprint('Saving as JPEG...')
@@ -804,7 +883,10 @@ class Mosaic(object):
                 if n_col:
                     neighbor = row[n_col-1]
                     offset = self._cv_match(tile, neighbor, **kwargs)
+                    #_w = 1280.
+                    #offset = (-(_w - 19.), 30.), 100, 100
                     if offset:
+                        #raw_input(offset)
                         xy, n_total, n_cluster = offset
                         nxy = (xy[0]*-1, xy[1]*-1)
                         score = self._cv_reliability(n_cluster, n_total)
@@ -818,6 +900,7 @@ class Mosaic(object):
                     neighbor = self.grid[n_row-1][n_col]
                     offset = self._cv_match(tile, neighbor, **kwargs)
                     if offset:
+                        #raw_input(offset)
                         xy, n_total, n_cluster = offset
                         nxy = (xy[0]*-1, xy[1]*-1)
                         score = self._cv_reliability(n_cluster, n_total)
@@ -1180,7 +1263,7 @@ class Mosaic(object):
 
 
 
-def mosey(path=None, param_file='params.json', skip_file=None,
+def mosey(path=None, output='.', param_file='params.json', skip_file=None,
           create_jpeg=False, opencv=True, label=None, **kwargs):
     """Stitches a set of directories using one set of parameters
 
@@ -1253,13 +1336,12 @@ def mosey(path=None, param_file='params.json', skip_file=None,
             cprint('Using list of skipped tiles'
                    ' from {}'.format(skip_file))
     positions = None
+    param_file = os.path.join(output, param_file)
     for path in tilesets:
         cprint('New tileset: {}'.format(os.path.basename(path)))
         # Check for element in foldername
-        num_cols = kwargs.get('num_cols')
-        snake = kwargs.get('snake')
-        mosaic = Mosaic(path, param_file, skip_file, label,
-                        num_cols=num_cols, snake=snake)
+        mosaic = Mosaic(path, output=output, param_file=param_file,
+                        skip_file=skip_file, label=label, **kwargs)
         if mosaic.grid:
             if not positions:
                 positions = mosaic.prepare_mosaic(param_file, opencv, **kwargs)
@@ -1271,42 +1353,3 @@ def mosey(path=None, param_file='params.json', skip_file=None,
         os.remove(param_file)
     except OSError:
         pass
-
-
-def _select_folder(title=('Please select the directory'
-                          ' containing your tilesets:')):
-    """Select directory using GUI
-
-    Args:
-        title (str): title of GUI window
-
-    Returns:
-        Path as to directory as string
-    """
-    root = Tkinter.Tk()
-    root.withdraw()
-    return tkFileDialog.askdirectory(parent=root, title=title,
-                                     initialdir=os.getcwd())
-
-
-def _guess_extension(path):
-    """Determines extension based on files in path
-
-    Args:
-        path (str): path to folder containing tiles
-
-    Returns:
-        File extension of first valid file type
-    """
-    for fn in os.listdir(path):
-        ext = os.path.splitext(fn)[1]
-        try:
-            IMAGE_MAP[ext.lower()]
-        except KeyError:
-            pass
-        else:
-            return ext
-    else:
-        msg = (u'Could not find a valid tileset in {} Supported image'
-                ' formats include {}').format(path, sorted(IMAGE_MAP))
-        raise Exception(msg)
