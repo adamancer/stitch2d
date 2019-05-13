@@ -1,0 +1,8 @@
+channels: [default]
+dependencies:
+- python=2.7
+- numpy
+- opencv
+- pillow
+- pyglet
+name: stitch2d
