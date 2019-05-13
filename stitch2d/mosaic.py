@@ -663,9 +663,16 @@ class Mosaic(object):
                 else:
                     fp = grid[n_row][n_col]
                     path = os.path.dirname(fp)
-                    size = Image.open(fp).size
-                    area = size[0] * size[1]
-                    tiles.append([area, fp, (x, y)])
+                    # When stitching multiple mosaics with the same params, you
+                    # can sometimes run into tilesets with fewer tiles than the
+                    # initial mosaic. Catch that error here.
+                    try:
+                        size = Image.open(fp).size
+                    except AttributeError:
+                        pass
+                    else:
+                        area = size[0] * size[1]
+                        tiles.append([area, fp, (x, y)])
                 n_col += 1
             n_row += 1
         # Create a lookup from overlaps
