@@ -2,3 +2,4 @@ include README.md
 include stitch2d/files/*.png
 include stitch2d/files/*.ttf
 include stitch2d/files/*.txt
+include stitch2d/files/*.zip
