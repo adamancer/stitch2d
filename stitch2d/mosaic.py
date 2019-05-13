@@ -245,7 +245,6 @@ class Mosaic(object):
         longest_row = 0
         for row, cols in rows.iteritems():
             while len(cols) < longest_row:
-                print longest_row
                 cols.append(None)
         #print longest_row
         #raw_input()
@@ -380,7 +379,7 @@ class Mosaic(object):
         # Create tiles and rows
         tiles = [temp[key] for key in sorted(temp.keys())]
         #tiles.sort()
-        for tile in tiles: print tile
+        #for tile in tiles: print tile
         return tiles
 
 
