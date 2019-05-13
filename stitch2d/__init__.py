@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 from .composite import brighten, composite, COLORS
 from .helpers import cprint, prompt
 from .mosaic import Mosaic, mosey

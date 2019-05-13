@@ -4,15 +4,26 @@ Stitch2D
 *Some features in this script require OpenCV 3.0 and ImageMagick.*
 
 Stitch2D is a Python script that can be used to stitch a two-dimensional
-grid of tiles into a mosaic. You can install it from the command line
-using pip:
+grid of tiles into a mosaic. As of version 0.4, it works in Python 3 only.
+
+The easiest way to install the stitch2d package is to use [Miniconda]. Once
+you have Miniconda installed on your system, open the Anaconda Prompt and use
+the following commands to install stitch2d into its own environment:
 
 ```
-pip install stitch2d
+cd /path/to/directory
+git clone https://github.com/adamancer/stitch2d
+cd stitch2d
+conda env create -f requirements.yml
+conda activate stitch2d
+python setup.py install
 ```
+
+Other installation methods may require compiling OpenCV manually.
+
 
 Overview
--------
+--------
 
 Users can set offsets manually (if the offset is regular) or automatically
 (if OpenCV is installed). If OpenCV is used, tiles that cannot be placed
@@ -20,8 +31,8 @@ confidently are excluded from the final mosaic. Tiles are not warped in
 either case.
 
 The options available in this module are fairly basic. For more complex
-tilesets, consider using the [image stitching plugin](http://fiji.sc/Image_Stitching)
-in Fiji.
+tilesets, consider using the
+[image stitching plugin](http://fiji.sc/Image_Stitching) in Fiji.
 
 [Documentation](http://stitch2d.readthedocs.org/en/latest/stitch2d.html) is
 available at ReadTheDocs.
@@ -29,13 +40,13 @@ available at ReadTheDocs.
 Using the Command Line Tools
 ----------------------------
 
- ⇩ [Example tileset for mosaic](http://mineralsciences.si.edu/share/tiles.zip)
- (18.5 MB; 8 columns, snaked)
+ *An example tileset is included in the package in the files directory as
+ example.zip  (18.5 MB; 8 columns, snaked).*
 
 Begin by collecting the tilesets you want to stitch as subdirectories
 in a single folder. Each subdirectory processed with a single command
 will be processed use the same parameters, so offsets for the different
-tilesets should be very identical.
+tilesets should be very similar.
 
 There are four subcommands that can be accessed from the command line:
 mosaic, composite, organize, and select. In addition to the text below,
@@ -147,11 +158,15 @@ destination directories:
 stitch2d organize /path/to/source /path/to/destination
 ```
 
+
 Recommended Libraries
 =====================
 
 OpenCV
 ------
+ **OpenCV can be installed using Miniconda, and the instructions below should
+no longer be necessary (and are in any case likely out of date).**
+
 [OpenCV](http://www.opencv.org/) is a super useful, basically
 open source computer vision library. It's a bit complicated to
 install. I found the following tutorials useful:
@@ -161,9 +176,13 @@ install. I found the following tutorials useful:
 *  [Ubuntu](http://www.pyimagesearch.com/2015/06/22/install-opencv-3-0-and-python-2-7-on-ubuntu/)
 *  [Windows](http://docs.opencv.org/3.0-beta/doc/tutorials/introduction/windows_install/windows_install.html)
 
+
 ImageMagick
 -----------
 The Python Imaging Library will sometimes fail to open TIFFs. When the
 mosaic script encounters unreadable TIFFs, it uses [ImageMagick](http://www.imagemagick.org/) to create a usable copy of the
 entire tile set. If ImageMagick is not installed, this workaround will
 fail and the mosaic will not be created.
+
+
+[Miniconda]: https://conda.io/miniconda.html
