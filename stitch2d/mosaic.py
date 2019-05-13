@@ -168,7 +168,7 @@ class Mosaic(object):
             if blurb is None and 1 <= len(kind) <= 2:
                 blurb = kind.lower().capitalize()
         fn = name.replace(' ', '_') if label is not None else fn
-        if kind is not None:
+        if kind is not None and not fn.endswith(kind):
             fn += '_{}'.format(kind)
         if blurb is not None:
             name += ' ({})'.format(blurb)
