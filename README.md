@@ -75,10 +75,16 @@ Optional arguments include:
    all subcommands except organize. If no path is specified, you will be
    prompted to select a directory.
 *  **-numcols**: Specifies the number of columns in the mosaic. If not provided,
-   the user will be prompted for this information.
+   the user will be prompted for this information if the script can't figure
+   it out.
+ *  **--blur**: Specifies a blur radius to smooth the appearance of features
+   (but not the boundaries between tiles; see --smooth below). Sometimes
+   useful when prettifying element maps but not necessary in most cases.
 *  **--raster**, **--snake**: Specifies whether tileset is rastered or snaked.
    If neither argument is provided, the user will be prompted for this
    information.
+*  **--smooth**: Specifies whether to try to smooth boundaries between tiles
+   to prevent checkerboarding
 *  **--create_jpeg**: Specifies whether to create a half-size JPEG derivative
    of the final mosaic.
 *  **--manual**: Force manual selection of offsets. The script will
