@@ -706,9 +706,8 @@ class Mosaic(object):
                     fp_root = grid[n_row][n_col]
                     im_root = Image.open(fp_root).convert('RGB')
                     if self.blur:
-                        im_root = im_root.filter(
-                            ImageFilter.GaussianBlur(self.blur)
-                            )
+                        blur = ImageFilter.GaussianBlur(self.blur)
+                        im_root = im_root.filter(blur)
                     # Scale neighbors
                     for neighbor in lookup.get(root, []):
                         coords = [coords for coords in list(neighbor.keys())
@@ -723,13 +722,14 @@ class Mosaic(object):
                         else:
                             im2 = Image.open(fp2).crop(dim2).convert('RGB')
                             if self.blur:
-                                im2 = im2.filter(
-                                    ImageFilter.GaussianBlur(self.blur)
-                                    )
-                            m2 = np.array(im2).mean() * scalars.get(fp2, 1.)
+                                blur = ImageFilter.GaussianBlur(self.blur)
+                                im2 = im2.filter(blur)
+                            arr = np.array(im2)
+                            m2 = arr[arr > 0].mean() * scalars.get(fp2, 1.)
                             # Crop root tile to dimensions of overlap
                             im1 = im_root.crop(dim1)
-                            m1 = np.array(im1).mean() * scalars.get(fp_root, 1.)
+                            arr = np.array(im1)
+                            m1 = arr[arr > 0].mean() * scalars.get(fp_root, 1.)
                             # Set scalar for neighbor, if not already set
                             scalars.setdefault(fp2, old_div(m1, m2))
                             if not coords in found:
@@ -745,7 +745,7 @@ class Mosaic(object):
             area, fp, coordinates = tile
             try:
                 im = Image.open(fp.encode('cp1252')).convert('RGB')
-            except (TypeError, UnicodeDecodeError:)
+            except (TypeError, UnicodeDecodeError):
                 im = Image.open(fp).convert('RGB')
             except OSError:
                 cprint('Encountered unreadable tiles but'
@@ -834,11 +834,16 @@ class Mosaic(object):
         x_offset_between_rows = offset[2]
         y_offset_between_rows = offset[3]
 
+        tiles = {}
         coordinates = {}
+        overlaps = []
         n_row = 0  # index of row
         for row in grid:
+            row = self.grid[n_row]
             n_col = 0  # index of column
             for fp in row:
+                tile = row[n_col]
+                pos = (n_col, n_row)
                 if bool(fp):
                     # Calculate x coordinate
                     x = ((w + x_offset_within_row) * n_col +
@@ -852,9 +857,20 @@ class Mosaic(object):
                         y -= y_offset_within_row * (dim[0] - 1)
                     position = 'x'.join([str(n) for n in [n_col, n_row]])
                     coordinates[position] = (x, y)
+                    # Calculate overlaps for smoothing calculation
+                    if n_row and self.smooth:
+                        xy = (x_offset_between_rows, y_offset_between_rows)
+                        neighbor = row[n_col-1]
+                        overlaps.append(self.row_compare(xy, pos,
+                                                         tile, neighbor, True))
+                    if n_col and self.smooth:
+                        xy = (x_offset_within_row, y_offset_within_row)
+                        neighbor = self.grid[n_row-1][n_col]
+                        overlaps.append(self.col_compare(xy, pos,
+                                                         tile, neighbor, True))
                 n_col += 1
             n_row += 1
-        self.overlaps = []
+        self.overlaps = overlaps
         return self._normalize_coordinates(coordinates)
 
 
@@ -898,18 +914,16 @@ class Mosaic(object):
                 if n_col:
                     neighbor = row[n_col-1]
                     offset = self._cv_match(tile, neighbor, **kwargs)
-                    #_w = 1280.
-                    #offset = (-(_w - 19.), 30.), 100, 100
                     if offset:
-                        #raw_input(offset)
                         xy, n_total, n_cluster = offset
                         nxy = (xy[0]*-1, xy[1]*-1)
                         score = self._cv_reliability(n_cluster, n_total)
                         tiles[tile]['offsets'].append(['left', xy, score])
-                        tiles[neighbor]['offsets'].append(['right', nxy,
+                        tiles[neighbor]['offsets'].append(['right',
+                                                           nxy,
                                                            score])
-                        if score > 5:
-                            overlaps.append(self.col_compare(offset, pos,
+                        if score > 5 and self.smooth:
+                            overlaps.append(self.col_compare(xy, pos,
                                                              tile, neighbor))
                 if n_row:
                     neighbor = self.grid[n_row-1][n_col]
@@ -920,10 +934,11 @@ class Mosaic(object):
                         nxy = (xy[0]*-1, xy[1]*-1)
                         score = self._cv_reliability(n_cluster, n_total)
                         tiles[tile]['offsets'].append(['top', xy, score])
-                        tiles[neighbor]['offsets'].append(['down', nxy,
+                        tiles[neighbor]['offsets'].append(['down',
+                                                           nxy,
                                                            score])
-                        if score > 5:
-                            overlaps.append(self.row_compare(offset, pos,
+                        if score > 5 and self.smooth:
+                            overlaps.append(self.row_compare(xy, pos,
                                                              tile, neighbor))
                 n_col += 1
             n_row += 1
@@ -1008,20 +1023,41 @@ class Mosaic(object):
         return self._normalize_coordinates(coordinates)
 
 
-    def row_compare(self, xy, tile, fp1, fp2):
+    def row_compare(self, xy, tile, fp1, fp2, manual=False):
+        """Compares overlapping sections of tiles in adjacent rows
+
+        Args:
+            xy (list): offsets as (dx, dy)
+            tile (list): (row, col) of primary image
+            fp1: path to primary image
+            fp2: path to neighbor above
+        """
+        dx, dy = [int(n) for n in xy]
+        dw, dh = [abs(n) for n in xy]
+        # Get upper part of bottom image
         im1 = Image.open(fp1)
         w, h = im1.size
-        dx, dy = [abs(int(n)) for n in xy[0]]
-        x1, y1 = dx, 0
-        x2, y2 = w, h - dy
+        if manual:
+            x1 = dw if dx <= 0 else 0
+            y1 = 0
+            x2 = w if dx <= 0 else w - dw
+            y2 = dh
+        else:
+            x1, y1 = dx, 0
+            x2, y2 = w, h - dy
         box1 = (x1, y1, x2, y2)
-
+        # Get lower part of top image
         im2 = Image.open(fp2)
         w, h = im2.size
-        x1, y1 = 0, dy
-        x2, y2 = w - dx, h
+        if manual:
+            x1 = 0 if dx <= 0 else dw
+            y1 = h - dh
+            x2 = w - dw if dx <= 0 else w
+            y2 = h
+        else:
+            x1, y1 = 0, dh
+            x2, y2 = w - dw, h
         box2 = (x1, y1, x2, y2)
-
         neighbor = tile[0], tile[1] - 1
         #print 'row_compare:', tile, neighbor
         #print fp1, self.grid[tile[1]][tile[0]]
@@ -1030,20 +1066,41 @@ class Mosaic(object):
         return ((tile, box1), (neighbor, box2))
 
 
-    def col_compare(self, xy, tile, fp1, fp2):
+    def col_compare(self, xy, tile, fp1, fp2, manual=False):
+        """Compares overlapping sections of tiles in adjacent columns
+
+        Args:
+            xy (list): offsets as (dx, dy)
+            tile (list): (row, col) of primary image
+            fp1: path to primary image
+            fp2: path to neighbor to the left
+        """
+        dx, dy = [int(n) for n in xy]
+        dw, dh = [abs(n) for n in xy]
+        # Get left part of right image
         im1 = Image.open(fp1)
         w, h = im1.size
-        dx, dy = [abs(int(n)) for n in xy[0]]
-        x1, y1 = 0, 0
-        x2, y2 = w - dx, h - dy
+        if manual:
+            x1 = 0
+            y1 = 0 if dy <= 0 else dh
+            x2 = dw
+            y2 = dh if dy <= 0 else h - dh
+        else:
+            x1, y1 = 0, 0
+            x2, y2 = w - dw, h - dh
         box1 = (x1, y1, x2, y2)
-
+        # Get right part of left image
         im2 = Image.open(fp2)
         w, h = im2.size
-        x1, y1 = dx, dy
-        x2, y2 = w, h
+        if manual:
+            x1 = w - dw
+            y1 = 0 if dy <= 0 else dh
+            x2 = w
+            y2 = dh if dy <= 0 else h - dh
+        else:
+            x1, y1 = dw, dh
+            x2, y2 = w, h
         box2 = (x1, y1, x2, y2)
-
         neighbor = tile[0] - 1, tile[1]
         #print 'col_compare:', tile, neighbor
         #print fp1, self.grid[tile[1]][tile[0]]
