@@ -210,16 +210,16 @@ def mandolin(lst, n):
 
 
 def read_image(fp, mode=None):
+    """Reads image using PIL"""
     im = Image.open(fp)
-    # Check for 16-bit images
+    # Workaround to handle 16-bit images
     data = np.array(im)
-    if np.max(data) > 255:
-        data = np.divide(data, 65536 / 255)
-        # Stretch data
+    maxval = np.max(data)
+    if maxval > 255:
+        # Calculate pixel values based on the range of values in the original
         def stretch(val, minval, maxval):
             return 255 * (val - minval) / (maxval - minval)
         minval = np.min(data)
-        maxval = np.max(data)
         data = np.array([stretch(x, minval, maxval) for x in data])
         im = Image.fromarray(data)
     if mode:
