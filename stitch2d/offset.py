@@ -29,27 +29,8 @@ class OffsetEngine(pyglet.window.Window):
 
 
     def __init__(self, rows, same_row=True, offsets=None, *args, **kwargs):
-        # Set window size in init because Windows doesn't pick up
-        # set_size() reliably.
-        display = pyglet.canvas.get_display()
-        screen = pyglet.canvas.get_display().get_screens()[0]
-        #platform = window.get_platform()
-        #display = platform.get_default_display()
-        #screen = display.get_default_screen()
-        margin = 75
-        super(OffsetEngine, self).__init__(
-            *args,
-            width=screen.width - margin * 2,
-            height=screen.height - margin * 2,
-            visible=False,
-            **kwargs)
-        self.set_location(margin, margin)
-
-        self.rows = rows
-        self.num_cols = len(rows[0])
-        self.num_rows = len(rows)
-        # Coordinates increase from 0,0 in the upper left. Offsets
-        # are defined as follows:
+        # Set coordinates Coordinates increase from 0,0 in the upper left.
+        # Offsets are defined as follows:
         #  Within row: y is positive if the top edge of the right
         #   tile is HIGHER than that of the left (stair step up).
         #   Because tiles must be shifted left to overlap, x
@@ -72,91 +53,114 @@ class OffsetEngine(pyglet.window.Window):
             self.x_offset_between_rows = 0
             self.y_offset_within_row = 0
             self.y_offset_between_rows = 0  # final value should be <= 0
-
-        self.hand = self.get_system_mouse_cursor(self.CURSOR_HAND)
-        self.crosshair = self.get_system_mouse_cursor(self.CURSOR_CROSSHAIR)
-        self.set_mouse_cursor(self.crosshair)
-
-        self.guidance = [
-            ('Click any distinct feature that appears on both sides'
-             ' of the boundary, or try the arrow keys for minor'
-             ' adjustsments'),
-            ('Click the corresponding feature on the other side'
-             ' of the boundary'),
-            ('Use the arrow keys to adjust the offset or click reset'
-             ' to start over')
-              ]
-        self.orig_guidance = copy(self.guidance)
-
+        # Get information about the grid
         self.same_row = same_row
-        if self.same_row:
-            self.set_caption('Set offset between tiles in the same row')
-        else:
-            self.set_caption('Set offset between tiles in different rows')
+        self.rows = rows
+        self.num_cols = len(rows[0])
+        self.num_rows = len(rows)
+        self._show = (self.same_row and self.num_cols > 1
+                      or not self.same_row and self.num_rows > 1)
+        if self._show:
+            # Set window size in init because Windows doesn't pick up
+            # set_size() reliably.
+            display = pyglet.canvas.get_display()
+            screen = pyglet.canvas.get_display().get_screens()[0]
+            #platform = window.get_platform()
+            #display = platform.get_default_display()
+            #screen = display.get_default_screen()
+            margin = 75
+            super(OffsetEngine, self).__init__(
+                *args,
+                width=screen.width - margin * 2,
+                height=screen.height - margin * 2,
+                visible=False,
+                **kwargs)
+            self.set_location(margin, margin)
 
-        self.n_row = 0
-        self.n_col = 0
+            self.hand = self.get_system_mouse_cursor(self.CURSOR_HAND)
+            self.crosshair = self.get_system_mouse_cursor(self.CURSOR_CROSSHAIR)
+            self.set_mouse_cursor(self.crosshair)
 
-        self.color = (255,255,255,255)
-        self.label_batch = pyglet.graphics.Batch()
-        self.labels = {}
-        self.labels['guidance'] = pyglet.text.Label(
-            self.guidance.pop(0),
-            width = old_div(self.width, 2),
-            align = 'center',
-            multiline = True,
-            x = old_div(self.width, 2),
-            y = self.height - 8,
-            anchor_x='center',
-            anchor_y='top',
-            batch=self.label_batch)
-        self.labels['offset'] = pyglet.text.Label(
-            '{}x{}'.format(self.x_offset_within_row, self.y_offset_within_row),
-            x = old_div(self.width, 2),
-            y = 8,
-            anchor_x='center',
-            anchor_y='bottom',
-            batch=self.label_batch)
-        self.labels['new'] = pyglet.text.Label(
-            'Get different tiles',
-            x = self.width - 8,
-            y = self.height - 8,
-            anchor_x='right',
-            anchor_y='top',
-            batch=self.label_batch)
-        self.labels['reset'] = pyglet.text.Label(
-            'Reset offset',
-            x = 8,
-            y = self.height - 8,
-            anchor_x='left',
-            anchor_y='top',
-            batch=self.label_batch)
-        self.labels['save'] = pyglet.text.Label(
-            'Save and return',
-            x = self.width - 8,
-            y = 8,
-            anchor_x='right',
-            anchor_y='bottom',
-            batch=self.label_batch)
-        self.labels['coordinates'] = pyglet.text.Label(
-            'Tile: {}x{}'.format(self.n_row, self.n_col),
-            x = 8,
-            y = 8,
-            anchor_x='left',
-            anchor_y='bottom',
-            batch=self.label_batch)
-        for key in self.labels:
-            self.labels[key].bold = True
-            self.labels[key].color = self.color
+            self.guidance = [
+                ('Click any distinct feature that appears on both sides'
+                 ' of the boundary, or try the arrow keys for minor'
+                 ' adjustsments'),
+                ('Click the corresponding feature on the other side'
+                 ' of the boundary'),
+                ('Use the arrow keys to adjust the offset or click reset'
+                 ' to start over')
+                  ]
+            self.orig_guidance = copy(self.guidance)
 
-        self.get_tiles()
-        self.set_visible(True)
+            if self.same_row:
+                self.set_caption('Set offset between tiles in the same row')
+            else:
+                self.set_caption('Set offset between tiles in different rows')
+
+            self.n_row = 0
+            self.n_col = 0
+
+            self.color = (255,255,255,255)
+            self.label_batch = pyglet.graphics.Batch()
+            self.labels = {}
+            self.labels['guidance'] = pyglet.text.Label(
+                self.guidance.pop(0),
+                width = old_div(self.width, 2),
+                align = 'center',
+                multiline = True,
+                x = old_div(self.width, 2),
+                y = self.height - 8,
+                anchor_x='center',
+                anchor_y='top',
+                batch=self.label_batch)
+            self.labels['offset'] = pyglet.text.Label(
+                '{}x{}'.format(self.x_offset_within_row,
+                               self.y_offset_within_row),
+                x = old_div(self.width, 2),
+                y = 8,
+                anchor_x='center',
+                anchor_y='bottom',
+                batch=self.label_batch)
+            self.labels['new'] = pyglet.text.Label(
+                'Get different tiles',
+                x = self.width - 8,
+                y = self.height - 8,
+                anchor_x='right',
+                anchor_y='top',
+                batch=self.label_batch)
+            self.labels['reset'] = pyglet.text.Label(
+                'Reset offset',
+                x = 8,
+                y = self.height - 8,
+                anchor_x='left',
+                anchor_y='top',
+                batch=self.label_batch)
+            self.labels['save'] = pyglet.text.Label(
+                'Save and return',
+                x = self.width - 8,
+                y = 8,
+                anchor_x='right',
+                anchor_y='bottom',
+                batch=self.label_batch)
+            self.labels['coordinates'] = pyglet.text.Label(
+                'Tile: {}x{}'.format(self.n_row, self.n_col),
+                x = 8,
+                y = 8,
+                anchor_x='left',
+                anchor_y='bottom',
+                batch=self.label_batch)
+            for key in self.labels:
+                self.labels[key].bold = True
+                self.labels[key].color = self.color
+            self.get_tiles()
+            self.set_visible(True)
 
 
 
 
     def set_offset(self):
-        pyglet.app.run()
+        if self._show:
+            pyglet.app.run()
         return (self.x_offset_within_row, self.y_offset_within_row,
                 self.x_offset_between_rows, self.y_offset_between_rows)
 
@@ -289,6 +293,10 @@ class OffsetEngine(pyglet.window.Window):
             except:
                 n_col -= 1
                 tiles = [self.rows[n_row][n_col], self.rows[n_row+1][n_col]]
+        elif self.same_row:
+            raise ValueError('Only one column')
+        else:
+            raise ValueError('Only one row')
         self.n_row = n_row
         self.n_col = n_col
         self.labels['coordinates'].text = 'Tile: {}x{}'.format(n_row, n_col)
@@ -307,6 +315,9 @@ class OffsetEngine(pyglet.window.Window):
 
 
     def composite(self, tiles):
+        if not tiles:
+            self.close()
+            return self
         t1, t2 = tiles
         w, h = t1.size
         if self.same_row:
