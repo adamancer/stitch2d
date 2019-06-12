@@ -19,6 +19,8 @@ from pyglet import window
 from pyglet.window import key, mouse
 from pyglet.gl.base import CanvasConfig, Context
 
+from .helpers import read_image
+
 
 
 
@@ -295,7 +297,7 @@ class OffsetEngine(pyglet.window.Window):
         # standpoint, we don't care about these, but we need to
         # try them because PIL can't process them.
         try:
-            tiles = [Image.open(tile).convert('RGBA') for tile in tiles]
+            tiles = [read_image(tile, 'RGBA') for tile in tiles]
         except:
             self.get_tiles()
         else:

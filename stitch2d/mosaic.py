@@ -41,8 +41,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .composite import brighten
-from .helpers import (cluster, cprint, mandolin, mogrify,
-                      prompt, _guess_extension, _select_folder, IMAGE_MAP)
+from .helpers import (cluster, cprint, mandolin, mogrify, prompt, read_image,
+                      _guess_extension, _select_folder, IMAGE_MAP)
 from .offset import OffsetEngine
 
 
@@ -193,7 +193,7 @@ class Mosaic(object):
         print('The tileset contains {} tiles'.format(len(tiles)))
         # Set self.size to the LARGEST tile size. If multiple sizes are
         # present, resize and manual options are forbidden.
-        sizes = [Image.open(tile).size for tile in tiles[:5]]
+        sizes = [read_image(fp).size for fp in tiles[:5]]
         self.size = (max([size[0] for size in sizes]),
                      max([size[1] for size in sizes]))
         if len(set(sizes)) > 1:
@@ -675,7 +675,7 @@ class Mosaic(object):
                     # can sometimes run into tilesets with fewer tiles than the
                     # initial mosaic. Catch that error here.
                     try:
-                        size = Image.open(fp).size
+                        size = read_image(fp).size
                     except AttributeError:
                         pass
                     else:
@@ -704,7 +704,7 @@ class Mosaic(object):
                     scalars.setdefault(root, 1.)
                     n_col, n_row = root
                     fp_root = grid[n_row][n_col]
-                    im_root = Image.open(fp_root).convert('RGB')
+                    im_root = read_image(fp_root)
                     if self.blur:
                         blur = ImageFilter.GaussianBlur(self.blur)
                         im_root = im_root.filter(blur)
@@ -720,7 +720,7 @@ class Mosaic(object):
                         except (IndexError, KeyError):
                             pass
                         else:
-                            im2 = Image.open(fp2).crop(dim2).convert('RGB')
+                            im2 = read_image(fp2).crop(dim2)
                             if self.blur:
                                 blur = ImageFilter.GaussianBlur(self.blur)
                                 im2 = im2.filter(blur)
@@ -744,9 +744,9 @@ class Mosaic(object):
         for tile in tiles[::-1]:
             area, fp, coordinates = tile
             try:
-                im = Image.open(fp.encode('cp1252')).convert('RGB')
+                im = read_image(fp.encode('cp1252'))
             except (TypeError, UnicodeDecodeError):
-                im = Image.open(fp).convert('RGB')
+                im = read_image(fp)
             except OSError:
                 cprint('Encountered unreadable tiles but'
                        ' could not fix them. Try installing'
@@ -1035,7 +1035,7 @@ class Mosaic(object):
         dx, dy = [int(n) for n in xy]
         dw, dh = [abs(n) for n in xy]
         # Get upper part of bottom image
-        im1 = Image.open(fp1)
+        im1 = read_image(fp1)
         w, h = im1.size
         if manual:
             x1 = dw if dx <= 0 else 0
@@ -1047,7 +1047,7 @@ class Mosaic(object):
             x2, y2 = w, h - dy
         box1 = (x1, y1, x2, y2)
         # Get lower part of top image
-        im2 = Image.open(fp2)
+        im2 = read_image(fp2)
         w, h = im2.size
         if manual:
             x1 = 0 if dx <= 0 else dw
@@ -1078,7 +1078,7 @@ class Mosaic(object):
         dx, dy = [int(n) for n in xy]
         dw, dh = [abs(n) for n in xy]
         # Get left part of right image
-        im1 = Image.open(fp1)
+        im1 = read_image(fp1)
         w, h = im1.size
         if manual:
             x1 = 0
@@ -1090,7 +1090,7 @@ class Mosaic(object):
             x2, y2 = w - dw, h - dh
         box1 = (x1, y1, x2, y2)
         # Get right part of left image
-        im2 = Image.open(fp2)
+        im2 = read_image(fp2)
         w, h = im2.size
         if manual:
             x1 = w - dw
@@ -1147,7 +1147,8 @@ class Mosaic(object):
                 fn = os.path.basename(fp)
                 cprint('Getting keypoints for {}'.format(fn), self.normal)
                 cprint('OpenCV: cv2.imread()', self.verbose)
-                img = cv2.imread(fp, 0)
+                #img = cv2.imread(fp, 0)
+                img = np.array(read_image(fp, mode='I'), dtype=np.uint8)
                 if kwargs['scalar'] < 1:
                     h, w = [int(n*kwargs['scalar']) for n in img.shape]
                     if h and w:

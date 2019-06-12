@@ -23,7 +23,7 @@ import pyglet
 import pyglet.window
 from PIL import Image
 
-from .helpers import cprint, mandolin, mogrify, prompt
+from .helpers import cprint, mandolin, mogrify, prompt, read_image
 
 
 
@@ -188,7 +188,7 @@ class Selector(object):
             break
         for fp in glob.iglob(os.path.join(path, '*' + self.ext)):
             # Standardize color space to RGB to prevent problems
-            img = Image.open(fp).convert('RGB')
+            img = read_image(fp)
             mask = Image.new('RGB', img.size, (255,255,255))
             img = Image.blend(img, mask, 0.35)
             # Calculate coordinates

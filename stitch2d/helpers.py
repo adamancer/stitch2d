@@ -16,6 +16,9 @@ import subprocess
 import sys
 from textwrap import fill
 
+import numpy as np
+from PIL import Image
+
 
 
 IMAGE_MAP = {
@@ -206,6 +209,26 @@ def mandolin(lst, n):
 
 
 
+def read_image(fp, mode=None):
+    im = Image.open(fp)
+    # Check for 16-bit images
+    data = np.array(im)
+    if np.max(data) > 255:
+        data = np.divide(data, 65536 / 255)
+        # Stretch data
+        def stretch(val, minval, maxval):
+            return 255 * (val - minval) / (maxval - minval)
+        minval = np.min(data)
+        maxval = np.max(data)
+        data = np.array([stretch(x, minval, maxval) for x in data])
+        im = Image.fromarray(data)
+    if mode:
+        im = im.convert(mode)
+    return im
+
+
+
+
 def _select_folder(title=('Please select the directory'
                           ' containing your tilesets:')):
     """Select directory using GUI
@@ -245,6 +268,8 @@ def _guess_extension(path):
         msg = (u'Could not find a valid tileset in {} Supported image'
                 ' formats include {}').format(path, sorted(IMAGE_MAP))
         raise Exception(msg)
+
+
 
 
 def _get_coordinates(fn):

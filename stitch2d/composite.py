@@ -9,7 +9,7 @@ import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 import numpy as np
 
-from .helpers import _guess_extension, _select_folder
+from .helpers import _guess_extension, _select_folder, read_image
 from .organizer import _get_name
 
 
@@ -117,7 +117,7 @@ def composite(path=None, output='.', label=None, jpeg=False, minval=None,
         element = colormap[to_color]
         print(' Processing {}...'.format(element))
         fp = elementmap[element]
-        im = Image.open(fp).convert('RGB')
+        im = read_image(fp)
         data = np.array(im)
         data = data.astype(np.uint16)
         # Identify from_color
