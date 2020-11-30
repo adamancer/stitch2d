@@ -17,7 +17,8 @@ import sys
 from textwrap import fill
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
+
 
 
 
@@ -26,6 +27,19 @@ IMAGE_MAP = {
     '.tif' : 'TIFF',
     '.tiff' : 'TIFF'
 }
+
+COLORS = {
+    'blue': (0, 0, 255),
+    'green': (0, 255, 0),
+    'red': (255, 0, 0),
+    'cyan': (0, 255, 255),
+    'magenta':(255, 0, 255),
+    'yellow': (255, 255, 0),
+    'black': (0, 0, 0),
+    'white': (255, 255, 255),
+}
+
+
 
 
 def cluster(data, maxgap):
@@ -227,6 +241,47 @@ def read_image(fp, mode=None):
     return im
 
 
+def get_color(im):
+    """Determines the base color of a simple image"""
+    colors = [tuple([255 if ch else 0 for ch in color])
+              for color in [t[1] for t in im.getcolors(512)]
+              if not len(set(color)) == 1]
+    if len(set(colors)) > 1:
+        raise Exception('Color error: {}'.format(set(colors)))
+    return colors[0]
+
+
+def recolor(im, to_color):
+    """Converts a simple image to a new color"""
+    data = np.array(im).astype(np.uint16)
+    to_color = COLORS.get(to_color, to_color)
+    from_color = get_color(im)
+    if to_color != from_color:
+        from_channel = [i for i, val in enumerate(from_color) if val][0]
+        for i, ch in enumerate(to_color):
+            if ch and i != from_channel:
+                data[...,i] = data[...,from_channel]
+        # Zero any channel not found in to_color
+        for i, ch in enumerate(from_color):
+            if ch and not to_color[i]:
+                data[...,i] = 0
+    return Image.fromarray(data)
+
+
+def brighten(im, minval):
+    def func(val, minval):
+        return minval + old_div((255 - minval) * val, 255)
+    arr = np.array(im)
+    arr[arr > 0] = np.apply_along_axis(func, 0, arr[arr > 0], minval=minval)
+    return Image.fromarray(arr)
+
+
+def blur(im, radius):
+    blur = ImageFilter.GaussianBlur(radius)
+    try:
+        return im.filter(blur)
+    except ValueError:
+        return im.convert('RGB').filter(blur)
 
 
 def _select_folder(title=('Please select the directory'
