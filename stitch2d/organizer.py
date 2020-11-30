@@ -43,6 +43,15 @@ def _get_name(fn):
         return None
 
 
+def _get_grid(fn):
+    """Extracts non-standard grid names from filename"""
+    match = re.search(r'\[(.*?)@\d', fn)
+    if match is not None:
+        grid = match.group(1)
+        if grid != 'Grid':
+            return '_' + grid
+    return ''
+
 
 
 def organize(src_dir=None, dst_dir=None):
@@ -85,14 +94,14 @@ def organize(src_dir=None, dst_dir=None):
             total += 1
             # Create directory if neccesary
             try:
-                os.makedirs(os.path.join(dst_dir, dn))
+                os.makedirs(os.path.join(dst_dir + _get_grid(fn), dn))
             except OSError:
                 pass
             else:
                 print('Creating directory {}...'.format(dn))
             # Move file into proper directory
             src = os.path.join(fp)
-            dst = os.path.join(dst_dir, dn)
+            dst = os.path.join(dst_dir + _get_grid(fn), dn)
             try:
                 open(dst, 'r')
             except IOError:
