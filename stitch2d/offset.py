@@ -367,6 +367,8 @@ class OffsetEngine(pyglet.window.Window):
         w, h = 0, 0
         if self.same_row:
             w = old_div(self.width, 2)
+            if w > self.tile_width:
+                w = self.tile_width
             x = self.x_offset_within_row
             y = self.y_offset_within_row
         else:
