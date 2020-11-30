@@ -122,7 +122,6 @@ class Mosaic(object):
             os.makedirs(output)
         except OSError:
             pass
-
         self.output = output
         self.normal = True
         self.verbose = False

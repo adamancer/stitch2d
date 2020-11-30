@@ -28,9 +28,8 @@ def _get_name(fn):
     """
     re_specimen = re.compile('[^\[]+')
     re_map = re.compile('_([A-z]{1,2})_[A-z+]{1,3}_map')
-
-    specimen = (re_specimen.match(os.path.splitext(fn)[0])
-                .group().capitalize().rstrip('_') + '_')
+    specimen = re_specimen.match(os.path.splitext(fn)[0]).group()
+    specimen = specimen.capitalize().rstrip('_') + '_'
     # Find name of element in filename
     if re_map.search(os.path.splitext(fn)[0]):
         element = re_map.search(os.path.splitext(fn)[0]).group(1)

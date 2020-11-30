@@ -181,7 +181,7 @@ class OffsetEngine(pyglet.window.Window):
             label = self.labels[key]
             x1, y1, x2, y2 = self.calculate_label_position(label)
             if x1 < x < x2 and y1 < y < y2:
-                label.color = (255,0,0,255)
+                label.color = (255, 0, 0, 255)
                 self.set_mouse_cursor(self.hand)
                 break
             else:
@@ -306,10 +306,10 @@ class OffsetEngine(pyglet.window.Window):
         # try them because PIL can't process them.
         try:
             tiles = [read_image(tile, 'RGBA') for tile in tiles]
-        except:
-            self.get_tiles()
-        else:
+            self.tile_width = tiles[0].size[0]
             return self.composite(tiles)
+        except:
+            return self.get_tiles()
 
 
 
@@ -342,7 +342,6 @@ class OffsetEngine(pyglet.window.Window):
             t2 = t2.crop((0, 0, crop_w, crop_h))       # bottom tile
             x1, y1 = 0, crop_h
             x2, y2 = 0, 0
-
         # Pyglet draws from 0,0 in the ___er left
         # Adding sprites to a batch is insufficient to keep them
         # from being trashed. They must be saved in a class variable.
@@ -390,7 +389,7 @@ class OffsetEngine(pyglet.window.Window):
         """Convert PIL Image to pyglet image"""
         w, h = img.size
         raw = img.convert(mode).tobytes('raw', mode)
-        return pyglet.image.ImageData(w, h, mode, raw, -w*len(mode))
+        return pyglet.image.ImageData(w, h, mode, raw, -w * len(mode))
 
 
 
