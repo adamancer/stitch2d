@@ -1,8 +1,3 @@
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from builtins import range
-from past.utils import old_div
 import glob
 import os
 
@@ -38,7 +33,7 @@ def brighten(val, minval):
     Returns:
         New channel value as int
     """
-    return minval + old_div((255 - minval) * val, 255)
+    return minval + (255 - minval) * val // 255
 
 
 
@@ -72,7 +67,7 @@ def convert(from_color, to_color, minval=None):
     if minval is not None:
         if not 0 <= minval <= 255:
             raise Exception('minval must be between 0 and 255')
-        val = minval + old_div((255 - minval) * val, 255)
+        val = minval + (255 - minval) * val // 255
     rgb = tuple([int(val) if ch else 0 for ch in to_color])
     return rgb
 

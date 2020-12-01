@@ -8,16 +8,6 @@ The easiest way to stitch a tileset is to use the
 from the command line: :code:`stitch2d mosaic`. Use the -h flag to
 see additional options.
 """
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
-from builtins import range
-from builtins import object
-from past.utils import old_div
 import csv
 import glob
 import os
@@ -492,8 +482,8 @@ class Mosaic(object):
         if self.smooth:
             scalars = {}
             found = []
-            n_row = old_div(len(grid), 2)
-            n_col = old_div(len(row), 2)
+            n_row = len(grid) // 2
+            n_col = len(row) // 2
             roots = [(n_col, n_row)]  # pos in overlap is like this I guess
             while True:
                 neighbors = []
@@ -527,7 +517,7 @@ class Mosaic(object):
                             arr = np.array(im1)
                             m1 = arr[arr > 0].mean() * scalars.get(fp_root, 1.)
                             # Set scalar for neighbor, if not already set
-                            scalars.setdefault(fp2, old_div(m1, m2))
+                            scalars.setdefault(fp2, m1 // m2)
                             if not coords in found:
                                 neighbors.append(coords)
                 roots = list(set(neighbors))
@@ -588,8 +578,7 @@ class Mosaic(object):
             cprint('Saving as JPEG...')
             fp = os.path.splitext(fp)[0] + '.jpg'
             try:
-                mosaic = mosaic.resize((old_div(mosaic_width, 2),
-                                        old_div(mosaic_height, 2)))
+                mosaic = mosaic.resize((mosaic_width // 2, mosaic_height // 2))
             except:
                 print('Failed to resize JPEG. Creating full-size instead.')
                 pass
@@ -1271,11 +1260,11 @@ class Mosaic(object):
             while i < len(matchesMask):
                 c1 = good[i].queryIdx
                 c2 = good[i].trainIdx
-                x.append(old_div((kp1[c1].pt[0] - kp2[c2].pt[0]), kwargs['scalar']))
-                y.append(old_div((kp1[c1].pt[1] - kp2[c2].pt[1]), kwargs['scalar']))
+                x.append((kp1[c1].pt[0] - kp2[c2].pt[0]) // kwargs['scalar'])
+                y.append((kp1[c1].pt[1] - kp2[c2].pt[1]) // kwargs['scalar'])
                 i += 1
-            x_avg = old_div(sum(x), len(x))
-            y_avg = old_div(sum(y), len(y))
+            x_avg = sum(x) // len(x)
+            y_avg = sum(y) // len(y)
 
             # Return coordinates, total size, and cluster size
             n = len(x)
@@ -1289,18 +1278,18 @@ class Mosaic(object):
             for m in good:
                 c1 = m.queryIdx
                 c2 = m.trainIdx
-                x.append(old_div((kp1[c1].pt[0] - kp2[c2].pt[0]), kwargs['scalar']))
-                y.append(old_div((kp1[c1].pt[1] - kp2[c2].pt[1]), kwargs['scalar']))
+                x.append((kp1[c1].pt[0] - kp2[c2].pt[0]) // kwargs['scalar'])
+                y.append((kp1[c1].pt[1] - kp2[c2].pt[1]) // kwargs['scalar'])
             if len(x) and len(y):
                 groups = cluster(x, 2)
                 x_max = max([len(group) for group in groups])
                 group = [group for group in groups if len(group)==x_max][0]
-                x_avg = old_div(sum(group), len(group))
+                x_avg = sum(group) // len(group)
 
                 groups = cluster(y, 2)
                 y_max = max([len(group) for group in groups])
                 group = [group for group in groups if len(group)==y_max][0]
-                y_avg = old_div(sum(group), len(group))
+                y_avg = sum(group) // len(group)
 
                 # Return coordinates, total size, and cluster size
                 n = len(x)

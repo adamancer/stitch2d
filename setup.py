@@ -8,7 +8,7 @@ except:
                         ' for more information about Stitch2D.')
 
 setup(name='stitch2d',
-      version='0.4',
+      version='0.5',
       description='Stitch a planar set of tiles into a mosaic',
       long_description=long_description,
       classifiers = [

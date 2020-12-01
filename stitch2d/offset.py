@@ -1,8 +1,3 @@
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from past.utils import old_div
-import ctypes
 import os
 import pyglet
 import random
@@ -105,10 +100,10 @@ class OffsetEngine(pyglet.window.Window):
             self.labels = {}
             self.labels['guidance'] = pyglet.text.Label(
                 self.guidance.pop(0),
-                width = old_div(self.width, 2),
+                width = self.width // 2,
                 align = 'center',
                 multiline = True,
-                x = old_div(self.width, 2),
+                x = self.width // 2,
                 y = self.height - 8,
                 anchor_x='center',
                 anchor_y='top',
@@ -116,7 +111,7 @@ class OffsetEngine(pyglet.window.Window):
             self.labels['offset'] = pyglet.text.Label(
                 '{}x{}'.format(self.x_offset_within_row,
                                self.y_offset_within_row),
-                x = old_div(self.width, 2),
+                x = self.width // 2,
                 y = 8,
                 anchor_x='center',
                 anchor_y='bottom',
@@ -271,8 +266,8 @@ class OffsetEngine(pyglet.window.Window):
     def get_tiles(self, from_middle=False):
         """Returns two adjacent tiles"""
         if from_middle:
-            n_col = old_div(self.num_cols, 2)
-            n_row = old_div(self.num_rows, 2)
+            n_col = self.num_cols // 2
+            n_row = self.num_rows // 2
         else:
             n_col = randint(0, self.num_cols - 1)
             n_row = randint(0, self.num_rows - 1)
@@ -321,7 +316,7 @@ class OffsetEngine(pyglet.window.Window):
         t1, t2 = tiles
         w, h = t1.size
         if self.same_row:
-            crop_w = old_div(self.width, 2)
+            crop_w = self.width // 2
             if crop_w > w:
                 crop_w = w
             crop_h = self.height
@@ -335,7 +330,7 @@ class OffsetEngine(pyglet.window.Window):
             crop_w = self.width
             if crop_w > w:
                 crop_w = w
-            crop_h = old_div(self.height, 2)
+            crop_h = self.height // 2
             if crop_h > h:
                 crop_h = h
             t1 = t1.crop((0, h - crop_h, crop_w, h))  # top tile
@@ -366,13 +361,13 @@ class OffsetEngine(pyglet.window.Window):
     def apply_offset(self):
         w, h = 0, 0
         if self.same_row:
-            w = old_div(self.width, 2)
+            w = self.width // 2
             if w > self.tile_width:
                 w = self.tile_width
             x = self.x_offset_within_row
             y = self.y_offset_within_row
         else:
-            h = old_div(self.height, 2)
+            h = self.height // 2
             x = self.x_offset_between_rows
             y = self.y_offset_between_rows
         self.sprites[1].x = w + x
@@ -404,8 +399,8 @@ class OffsetEngine(pyglet.window.Window):
             x1 = label.x - label.content_width
             x2 = label.x
         else:
-            x1 = label.x - old_div(label.content_width, 2)
-            x2 = label.x + old_div(label.content_width, 2)
+            x1 = label.x - label.content_width // 2
+            x2 = label.x + label.content_width // 2
         if label.anchor_y == 'top':
             y1 = label.y - label.content_height
             y2 = label.y
@@ -413,6 +408,6 @@ class OffsetEngine(pyglet.window.Window):
             y1 = label.y
             y2 = label.y + label.content_height
         else:
-            y1 = label.y - old_div(label.content_height, 2)
-            y2 = label.y + old_div(label.content_height, 2)
+            y1 = label.y - label.content_height // 2
+            y2 = label.y + label.content_height // 2
         return x1, y1, x2, y2

@@ -1,14 +1,4 @@
 """A collection of general use functions used by the stitch2d module"""
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-
-from future import standard_library
-standard_library.install_aliases()
-from builtins import input
-from builtins import str
-from builtins import range
-from past.utils import old_div
 import os
 import re
 import shlex
@@ -213,7 +203,7 @@ def mandolin(lst, n):
         with empty strings to n if the original list is not
         exactly divisible by n.
     """
-    mandolined = [lst[i*n:(i+1)*n] for i in range(old_div(len(lst), n))]
+    mandolined = [lst[i * n:(i + 1) * n] for i in range(len(lst) // n)]
     remainder = len(lst) % n
     if remainder:
         leftovers = lst[-remainder:]
@@ -270,7 +260,7 @@ def recolor(im, to_color):
 
 def brighten(im, minval):
     def func(val, minval):
-        return minval + old_div((255 - minval) * val, 255)
+        return minval + (255 - minval) * val // 255
     arr = np.array(im)
     arr[arr > 0] = np.apply_along_axis(func, 0, arr[arr > 0], minval=minval)
     return Image.fromarray(arr)

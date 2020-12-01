@@ -1,13 +1,4 @@
-"""Allows users to select tiles to remove from future
-data collection or mosaicking."""
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
-from builtins import object
-from past.utils import old_div
+"""Allows users to select tiles to remove from future data collection or mosaicking."""
 import decimal
 import glob
 import os
@@ -206,7 +197,7 @@ class Selector(object):
             grid[key] = (img, fp)
 
         self.num_cols = max(cols) + 1
-        self.num_rows = old_div(len(grid), self.num_cols) + 1
+        self.num_rows = len(grid) // self.num_cols + 1
 
         filenames = {}
         for key in list(grid.keys()):
@@ -219,10 +210,8 @@ class Selector(object):
                                             os.path.basename(filenames[i]))
             del grid[key]
 
-        self.coordinate_width = (old_div(abs(self.ul[0] - self.lr[0]),
-                                 (self.num_cols - 1)))
-        self.coordinate_height = (old_div(abs(self.ul[1] - self.lr[1]),
-                                  (self.num_rows - 1)))
+        self.coordinate_width = abs(self.ul[0] - self.lr[0]) // (self.num_cols - 1)
+        self.coordinate_height = abs(self.ul[1] - self.lr[1]) // (self.num_rows - 1)
 
         row_w = w * self.num_cols
         row_h = h * self.num_rows
@@ -234,8 +223,8 @@ class Selector(object):
 
         adjusted_width = (resized_w + 1) * self.num_cols
         adjusted_height = (resized_h + 1) * self.num_rows
-        x = old_div((self.window_width - adjusted_width), 2) + 75
-        y = old_div((self.window_height - adjusted_height), 2) + 75
+        x = (self.window_width - adjusted_width) // 2 + 75
+        y = (self.window_height - adjusted_height) // 2 + 75
 
         for key in grid:
             grid[key] = grid[key].resize((resized_w, resized_h))
