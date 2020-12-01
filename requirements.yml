@@ -4,5 +4,6 @@ dependencies:
 - numpy
 - opencv
 - pillow
+- pip
 - pip: [pyglet]
 name: stitch2d
