@@ -16,7 +16,7 @@ git clone https://github.com/adamancer/stitch2d
 cd stitch2d
 conda env create -f requirements.yml
 conda activate stitch2d
-python setup.py install
+pip install .
 ```
 
 Other installation methods may require compiling OpenCV manually.
