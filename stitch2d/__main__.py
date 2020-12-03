@@ -1,6 +1,4 @@
 """Command line tools for preparing and stitching tilesets"""
-from __future__ import unicode_literals
-
 import argparse
 import sys
 
