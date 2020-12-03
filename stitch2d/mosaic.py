@@ -29,9 +29,9 @@ except ImportError:
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from .composite import brighten
 from .helpers import (
     blur,
+    brighten,
     cluster,
     cprint,
     mandolin,
@@ -475,6 +475,7 @@ class Mosaic(object):
         # Normalize colors by comparing overlaps between adjacent tiles,
         # building out from the middle of the mosaic to minimize edge effects
         scalars = {}
+        brightness = {}
         if self.smooth:
             found = []
             n_row = len(grid) // 2
@@ -524,16 +525,17 @@ class Mosaic(object):
 
                             if not coords in found:
                                 neighbors.append(coords)
+                                brightness[fp2] = arr2[arr2 > 0].mean()
 
                 roots = list(set(neighbors))
                 if not roots:
                     break
 
-        # Set maximum scalar to exactly 1
+        # Normalize scalars to brightest tile
         if scalars:
-            max_scalar = max(scalars.values())
-            if max_scalar > 1:
-                scalars = {k: v / max_scalar for k, v in scalars.items()}
+            brightest = sorted(brightness.items(), key=lambda kv: kv[1])[-1][0]
+            base_scalar = scalars[brightest]
+            scalars = {k: v / base_scalar for k, v in scalars.items()}
 
         # Paste tiles. If tiles are not uniform in size, paste them in
         # order of increasing size. This is intended to resolve an issue
@@ -561,9 +563,7 @@ class Mosaic(object):
                 if self.smooth:
                     data[data > 0] *= scalars.get(fp, 1.)
                 if self.minval:
-                    data[data > 0] = np.apply_along_axis(
-                        brighten, 0, data[data > 0], minval=self.minval
-                    )
+                    data[data < self.minval] = 0
                 data[data > 255] = 255
                 im = Image.fromarray(data.astype(np.uint8))
             mosaic.paste(im, coordinates)
