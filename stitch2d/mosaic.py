@@ -1427,7 +1427,17 @@ def mosey(path=None, output='.', param_file='params.json', skip_file=None,
                ' main directory instead.'.format(path))
         tilesets = [path]
     # Move tilesets most likely to yield good mosaics to front
-    keys = ['Al', 'Fe', 'Ca', 'Mg',  'ppl', 'nbsed', 'bsed']
+    keys = [
+        'Al',
+        'Fe',
+        'Ca',
+        'Mg',
+        'ppl',
+        'refgrey',
+        'nbsed',
+        'grey',
+        'bsed',
+    ]
     tilesets = sort_tilesets(tilesets, keys=keys)
     # Check for skipped files. By default, mosey will check all
     # subdirectories of the main directory for skipped file list and then
@@ -1504,7 +1514,7 @@ def sort_tilesets(tilesets, keys=None):
     for group in groups.values():
         for key in keys:
             for path in group[:]:
-                if re.search(r'(\b|_){}(\b|_)'.format(key), path):
+                if re.search(r'(\b|_){}(\b|_)'.format(key), path, flags=re.I):
                     group.insert(0, group.pop(group.index(path)))
         tilesets.extend(group)
     #for i, tileset in enumerate(tilesets):
