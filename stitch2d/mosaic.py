@@ -292,8 +292,6 @@ class Mosaic(object):
             return self
 
 
-
-
     def prepare_mosaic(self, param_file=None, opencv=True, **kwargs):
         """Determines coordinates for tiles based on tileset metadata
 
@@ -401,8 +399,6 @@ class Mosaic(object):
         return posdata
 
 
-
-
     def create_mosaic(self, posdata, label=True, create_jpeg=True):
         """Draws mosaic based on the tile coordinates
 
@@ -475,10 +471,11 @@ class Mosaic(object):
             data = {tuple(t1[0]): t1[1], tuple(t2[0]): t2[1]}
             for key in data:
                 lookup.setdefault(key, []).append(data)
+
         # Normalize colors by comparing overlaps between adjacent tiles,
         # building out from the middle of the mosaic to minimize edge effects
+        scalars = {}
         if self.smooth:
-            scalars = {}
             found = []
             n_row = len(grid) // 2
             n_col = len(row) // 2
@@ -490,13 +487,16 @@ class Mosaic(object):
                     n_col, n_row = root
                     fp_root = grid[n_row][n_col]
                     scalars.setdefault(fp_root, 1.)
-                    im_root = read_image(fp_root)
+
+                    # Scalar computation does not work with at least mode=L,
+                    # so force images to RGB for this part
+                    im_root = read_image(fp_root, "RGB")
                     if self.blur:
                         im_root = blur(im_root, self.blur)
-                    # Scale neighbors
+
+                    # Scale each tile to its neighbor
                     for neighbor in lookup.get(root, []):
-                        coords = [coords for coords in list(neighbor.keys())
-                                  if coords != root][0]
+                        coords = [c for c in neighbor.keys() if c != root][0]
                         dim1 = neighbor[root]
                         dim2 = neighbor[coords]
                         n_col, n_row = coords
@@ -505,25 +505,39 @@ class Mosaic(object):
                         except (IndexError, KeyError):
                             pass
                         else:
-                            im2 = read_image(fp2).crop(dim2)
+                            # Crop root to overlap with neighbor
+                            im1 = im_root.crop(dim1)
+                            arr1 = np.array(im1)
+
+                            # Crop neighbor to overlap with root
+                            im2 = read_image(fp2, "RGB").crop(dim2)
                             if self.blur:
                                 im2 = blur(im2, self.blur)
-                            arr = np.array(im2)
-                            m2 = arr[arr > 0].mean() * scalars.get(fp2, 1.)
-                            # Crop root tile to dimensions of overlap
-                            im1 = im_root.crop(dim1)
-                            arr = np.array(im1)
-                            m1 = arr[arr > 0].mean() * scalars.get(fp_root, 1.)
-                            # Set scalar for neighbor, if not already set
-                            scalars.setdefault(fp2, m1 // m2)
+                            arr2 = np.array(im2)
+
+                            # Take mean of overlap for both images and
+                            # calculate scalar needed to match neighbor
+                            # to root
+                            m1 = arr1[arr1 > 0].mean() * scalars.get(fp_root, 1.)
+                            m2 = arr2[arr2 > 0].mean() * scalars.get(fp2, 1.)
+                            scalars.setdefault(fp2, m1 / m2)
+
                             if not coords in found:
                                 neighbors.append(coords)
+
                 roots = list(set(neighbors))
                 if not roots:
                     break
+
+        # Set maximum scalar to exactly 1
+        if scalars:
+            max_scalar = max(scalars.values())
+            if max_scalar > 1:
+                scalars = {k: v / max_scalar for k, v in scalars.items()}
+
         # Paste tiles. If tiles are not uniform in size, paste them in
         # order of increasing size. This is intended to resolve an issue
-        # with artifacts when using scropped images.
+        # with artifacts when using cropped images.
         mosaic = Image.new('RGB', (mosaic_width, mosaic_height), self.fill)
         for tile in tiles[::-1]:
             area, fp, coordinates = tile
@@ -538,26 +552,29 @@ class Mosaic(object):
                        ' script.')
                 sys.exit()
             im = im.convert('RGB')
-            # Adjust colors if smooth is specified
+
             if self.blur:
                 im = blur(im, self.blur)
+
             if self.smooth or self.minval:
                 data = np.array(im).astype(np.float64)
                 if self.smooth:
                     data[data > 0] *= scalars.get(fp, 1.)
                 if self.minval:
-                    data[data > 0] = np.apply_along_axis(brighten, 0,
-                                                         data[data > 0],
-                                                         minval=self.minval)
+                    data[data > 0] = np.apply_along_axis(
+                        brighten, 0, data[data > 0], minval=self.minval
+                    )
                 data[data > 255] = 255
                 im = Image.fromarray(data.astype(np.uint8))
             mosaic.paste(im, coordinates)
+
         # Add label
         if label:
             ttf = os.path.join(self.basepath, 'files', 'OpenSans-Regular.ttf')
             text = self.name
             text = text[0].upper() + text[1:]
             draw = ImageDraw.Draw(mosaic)
+
             # Resize text to a reasonable size based on the
             # dimensions of the mosaic
             size = 100
@@ -568,6 +585,7 @@ class Mosaic(object):
             x = int(0.02 * mosaic_width)
             y = mosaic_height - int(label_height)
             draw.text((x, y), text, self.text, font=font)
+
         cprint('Saving as {}...'.format('TIFF'))
         #fp = os.path.join(self.path, os.pardir, self.filename + '.tif')
         fp = os.path.join(self.output, self.filename + '.tif')
@@ -588,8 +606,6 @@ class Mosaic(object):
             except OSError:
                 pass
         return True
-
-
 
 
     def _test_file(self, path):
@@ -624,8 +640,6 @@ class Mosaic(object):
                     sys.exit()
             break
         return path
-
-
 
 
     def _sort(self, tiles):
@@ -670,7 +684,6 @@ class Mosaic(object):
         e = None
         for tile in tiles:
             key = tile.replace(starts, '', 1).replace(ends, '', 1)
-            print(tile, '=>', key)
             try:
                 # Special case: SEM grid notation. We can use the
                 # coordinates in the grid to calculate the number
@@ -702,8 +715,6 @@ class Mosaic(object):
         #tiles.sort()
         #for tile in tiles: print tile
         return tiles
-
-
 
 
     def _patch(self, tiles, skiplist=[]):
@@ -758,8 +769,6 @@ class Mosaic(object):
         return tiles
 
 
-
-
     def _missing(self, tiles):
         """Check tilset for missing tiles by analyzing keys
 
@@ -783,8 +792,6 @@ class Mosaic(object):
             cprint('All tiles appear to be present')
 
 
-
-
     def _desnake(self, grid, pattern):
         """Reorders tiles to account for snake pattern
 
@@ -799,8 +806,6 @@ class Mosaic(object):
             return [grid[i][::-1] if i % 2 else grid[i]
                     for i in range(0, len(grid))]
         return tiles
-
-
 
 
     def _handle_skipped(self, skip_file):
@@ -825,15 +830,12 @@ class Mosaic(object):
                 raise TypeError
 
 
-
-
     def _set_coordinates(self):
         """Allows user to set offsets and coordinates using GUI
 
         Calls :py:func:`~Stitch2D.offset.OffsetEngine` to determine
         offset within and between rows. The same offset is used across
-        the entire grid, so this will produce a useful but imperfect
-        mosaic.
+        the entire grid, so this will produce an imperfect mosaic.
 
         Returns:
             A dict of coordinates specifying the placement of
@@ -864,7 +866,7 @@ class Mosaic(object):
             for fp in row:
                 tile = row[n_col]
                 pos = (n_col, n_row)
-                if bool(fp):
+                if fp:
                     # Calculate x coordinate
                     x = ((w + x_offset_within_row) * n_col +
                          x_offset_between_rows * n_row)
@@ -880,22 +882,22 @@ class Mosaic(object):
                     # Calculate overlaps for smoothing calculation
                     if n_row and self.smooth:
                         xy = (x_offset_between_rows, y_offset_between_rows)
-                        neighbor = row[n_col-1]
-                        overlaps.append(
-                            self._row_compare(xy, pos, tile, neighbor, True)
-                        )
+                        neighbor = self.grid[n_row - 1][n_col]
+                        if tile and neighbor:
+                            overlaps.append(
+                                self._row_compare(xy, pos, tile, neighbor, True)
+                            )
                     if n_col and self.smooth:
                         xy = (x_offset_within_row, y_offset_within_row)
-                        neighbor = self.grid[n_row-1][n_col]
-                        overlaps.append(
-                            self._col_compare(xy, pos, tile, neighbor, True)
-                        )
+                        neighbor = row[n_col - 1]
+                        if tile and neighbor:
+                            overlaps.append(
+                                self._col_compare(xy, pos, tile, neighbor, True)
+                            )
                 n_col += 1
             n_row += 1
         self.overlaps = overlaps
         return self._normalize_coordinates(coordinates)
-
-
 
 
     def _cv_coordinates(self, detector='SIFT', **kwargs):
@@ -1047,92 +1049,117 @@ class Mosaic(object):
         return self._normalize_coordinates(coordinates)
 
 
-    def _row_compare(self, xy, tile, fp1, fp2, manual=False):
+    def _row_compare(self, xy, tile, fp_lower, fp_upper, manual=False):
         """Compares overlapping sections of tiles in adjacent rows
 
         Args:
             xy (list): offsets as (dx, dy)
             tile (list): (row, col) of primary image
-            fp1: path to primary image
-            fp2: path to neighbor above
+            fp_lower: path to primary (lower) image
+            fp_upper: path to neighbor above
         """
+        # Load images
+        im_lower = read_image(fp_lower)
+        im_upper = read_image(fp_upper)
+        if im_lower.size != im_upper.size:
+            raise ValueError("images are different sizes")
+        w, h = im_lower.size
+
+        # Offsets set manually differ from those calculated by OpenCV.
+        # Standardize the offsets here to the OpenCV way.
         dx, dy = [int(n) for n in xy]
-        dw, dh = [abs(n) for n in xy]
+        if manual:
+            dx = -dx
+            dy = -h - dy
+        dw = abs(dx)
+        dh = abs(dy)
+
         # Get upper part of bottom image
-        im1 = read_image(fp1)
-        w, h = im1.size
-        if manual:
-            x1 = dw if dx <= 0 else 0
-            y1 = 0
-            x2 = w if dx <= 0 else w - dw
-            y2 = dh
-        else:
-            x1, y1 = dx, 0
-            x2, y2 = w, h - dy
+        x1 = dx if dx >= 0 else 0
+        y1 = 0
+        x2 = w + (dx if dx < 0 else 0)
+        y2 = h - dh
         box1 = (x1, y1, x2, y2)
+
         # Get lower part of top image
-        im2 = read_image(fp2)
-        w, h = im2.size
-        if manual:
-            x1 = 0 if dx <= 0 else dw
-            y1 = h - dh
-            x2 = w - dw if dx <= 0 else w
-            y2 = h
-        else:
-            x1, y1 = 0, dh
-            x2, y2 = w - dw, h
+        x1 = 0
+        y1 = dh
+        x2 = w - dw
+        y2 = h
         box2 = (x1, y1, x2, y2)
+
+        #im_lower.crop(box1).show()
+        #im_upper.crop(box2).show()
+        #input("paused")
+
+        self._validate_boxes(box1, box2)
+
         neighbor = tile[0], tile[1] - 1
-        #print '_row_compare:', tile, neighbor
-        #print fp1, self.grid[tile[1]][tile[0]]
-        #print fp2, self.grid[neighbor[1]][neighbor[0]]
-        #raw_input()
         return ((tile, box1), (neighbor, box2))
 
 
-    def _col_compare(self, xy, tile, fp1, fp2, manual=False):
+    def _col_compare(self, xy, tile, fp_right, fp_left, manual=False):
         """Compares overlapping sections of tiles in adjacent columns
 
         Args:
             xy (list): offsets as (dx, dy)
             tile (list): (row, col) of primary image
-            fp1: path to primary image
-            fp2: path to neighbor to the left
+            fp_right: path to primary (right) image
+            fp_left: path to neighbor to the left
         """
+
+        # Load images
+        im_right = read_image(fp_right)
+        im_left = read_image(fp_left)
+        if im_right.size != im_left.size:
+            raise ValueError("images are different sizes")
+        w, h = im_right.size
+
+        # Offsets set manually differ from those calculated by OpenCV.
+        # Standardize the offsets here to the OpenCV way.
         dx, dy = [int(n) for n in xy]
-        dw, dh = [abs(n) for n in xy]
+        if manual:
+            dx = -w - dx
+            dy = -dy
+        dw = abs(dx)
+        dh = abs(dy)
+
         # Get left part of right image
-        im1 = read_image(fp1)
-        w, h = im1.size
-        if manual:
-            x1 = 0
-            y1 = 0 if dy < 0 else dh
-            x2 = dw
-            y2 = dh if dy < 0 else h - dh
-        else:
-            x1, y1 = 0, 0
-            x2, y2 = w - dw, h - dh
+        x1 = 0
+        y1 = 0
+        x2 = w - dw
+        y2 = h - dh
         box1 = (x1, y1, x2, y2)
+
         # Get right part of left image
-        im2 = read_image(fp2)
-        w, h = im2.size
-        if manual:
-            x1 = w - dw
-            y1 = 0 if dy < 0 else dh
-            x2 = w
-            y2 = dh if dy < 0 else h - dh
-        else:
-            x1, y1 = dw, dh
-            x2, y2 = w, h
+        x1 = dw
+        y1 = dh
+        x2 = w
+        y2 = h
         box2 = (x1, y1, x2, y2)
+
+        #im_right.crop(box1).show()
+        #im_left.crop(box2).show()
+        #input("paused")
+
+        self._validate_boxes(box1, box2)
+
         neighbor = tile[0] - 1, tile[1]
-        #print '_col_compare:', tile, neighbor
-        #print fp1, self.grid[tile[1]][tile[0]]
-        #print fp2, self.grid[neighbor[1]][neighbor[0]]
-        #raw_input()
         return ((tile, box1), (neighbor, box2))
 
 
+    @staticmethod
+    def _validate_boxes(box1, box2):
+        """Checks if two boxes are valid and have the same dimensions"""
+        try:
+            assert all([c >= 0 for c in box1]), f"negative coordinate"
+            assert all([c >= 0 for c in box2]), f"negative coordinate"
+            assert box1[2] - box1[0] == box2[2] - box2[0], "mismatched width"
+            assert box1[3] - box1[1] == box2[3] - box2[1], "mismatched height"
+        except AssertionError:
+            print(box1)
+            print(box2)
+            raise
 
 
     def _cv_match(self, img1, img2, detector='SIFT', **kwargs):
@@ -1298,8 +1325,6 @@ class Mosaic(object):
                 return (x_avg, y_avg), n, m
 
 
-
-
     def _cv_reliability(self, n_cluster, n_total):
         """Assess reliability of offset
 
@@ -1323,16 +1348,12 @@ class Mosaic(object):
         return n_cluster * pct_cluster
 
 
-
-
     def _analyze_offsets(self, tiles):
         """Placeholder for future test"""
         for tile in tiles:
             tile = tiles[tile]
             n_row, n_col = tile['position']
             offsets = tile['offsets']
-
-
 
 
     def _normalize_coordinates(self, coordinates):
@@ -1356,8 +1377,6 @@ class Mosaic(object):
             coordinates[tile] = int(x - x_min), int(y - y_min)
 
         return {'coordinates': coordinates, 'overlaps': self.overlaps}
-
-
 
 
 def mosey(path=None, output='.', param_file='params.json', skip_file=None,
@@ -1396,7 +1415,6 @@ def mosey(path=None, output='.', param_file='params.json', skip_file=None,
     """
     if not path:
         path = _select_folder()
-        kwargs['path'] = path
     # Check for tiles. If none found, try the parent directory.
     try:
         tilesets = [os.path.join(path, dn) for dn in os.listdir(path)
@@ -1455,23 +1473,28 @@ def mosey(path=None, output='.', param_file='params.json', skip_file=None,
 
 
 def fingerprint(tilesets):
+    """Charcterizes a list of tilesets"""
     fingerprints = {}
     exts = []
     for path in tilesets:
         exts.append(_guess_extension(path))
     for path in tilesets:
+        print("Characterizing {}...".format(path))
         tiles = []
         for ext in set(exts):
             tiles.extend(list(glob.iglob(os.path.join(path, '*' + ext))))
+
+        # Check size of first, middle, and last tiles
         sizes = []
-        for tile in tiles:
+        for tile in (tiles[0], tiles[len(tiles) // 2], tiles[-1]):
             sizes.append(Image.open(tile).size)
-        sizes = list(set(sizes))
-        fingerprints[path] = (len(tiles), sizes)
+
+        fingerprints[path] = (len(tiles), list(set(sizes)))
     return fingerprints
 
 
 def sort_tilesets(tilesets, keys=None):
+    """Sorts a list of tilesets"""
     if keys is None:
         keys = []
     groups = {}
