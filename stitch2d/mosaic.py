@@ -17,8 +17,6 @@ import shutil
 import subprocess
 import sys
 import time
-import tkinter
-import tkinter.filedialog
 import json as serialize
 from copy import copy
 from datetime import datetime

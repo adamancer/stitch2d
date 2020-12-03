@@ -8,6 +8,7 @@ from textwrap import fill
 
 import numpy as np
 from PIL import Image, ImageFilter
+from PySide2.QtWidgets import QApplication, QFileDialog
 
 
 
@@ -54,7 +55,6 @@ def cluster(data, maxgap):
     return groups
 
 
-
 def cprint(s, show=True):
     """Prints string only if conditional is true
 
@@ -67,8 +67,6 @@ def cprint(s, show=True):
     """
     if bool(s) and show:
         print(fill(s, subsequent_indent='  '))
-
-
 
 
 def prompt(prompt, validator, confirm=False,
@@ -156,7 +154,6 @@ def prompt(prompt, validator, confirm=False,
     return result
 
 
-
 def mogrify(path, ext):
     """Uses ImageMagick to copy source files to a working directory
 
@@ -187,8 +184,6 @@ def mogrify(path, ext):
         return True
 
 
-
-
 def mandolin(lst, n):
     """Split list into groups of n members
 
@@ -209,8 +204,6 @@ def mandolin(lst, n):
         leftovers = lst[-remainder:]
         mandolined.append(leftovers + [''] * (n - len(leftovers)))
     return mandolined
-
-
 
 
 def read_image(fp, mode=None):
@@ -274,8 +267,7 @@ def blur(im, radius):
         return im.convert('RGB').filter(blur)
 
 
-def _select_folder(title=('Please select the directory'
-                          ' containing your tilesets:')):
+def _select_folder(title='Select tileset directory'):
     """Select directory using GUI
 
     Args:
@@ -284,12 +276,8 @@ def _select_folder(title=('Please select the directory'
     Returns:
         Path as to directory as string
     """
-    root = Tkinter.Tk()
-    root.withdraw()
-    return tkFileDialog.askdirectory(parent=root, title=title,
-                                     initialdir=os.getcwd())
-
-
+    app = QApplication()
+    return QFileDialog.getExistingDirectory(caption=title)
 
 
 def _guess_extension(path):
