@@ -1,9 +1,12 @@
-channels: [default]
+name: stitch2d
+channels:
+- conda-forge
+- default
 dependencies:
 - python=3.6
 - numpy
 - opencv
 - pillow
 - pip
+- pyside2
 - pip: [pyglet]
-name: stitch2d

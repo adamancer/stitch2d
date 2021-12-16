@@ -252,14 +252,27 @@ def recolor(im, to_color):
 
 
 def brighten(im, minval):
+    """Brightens an image using a minimum allowable value
+
+    Args:
+        im (str): path to image file
+        minval (int): minimum channel value
+
+
+    Returns:
+       Brightened PIL Image
+    """
+
     def func(val, minval):
         return minval + (255 - minval) * val // 255
+
     arr = np.array(im)
     arr[arr > 0] = np.apply_along_axis(func, 0, arr[arr > 0], minval=minval)
     return Image.fromarray(arr)
 
 
 def blur(im, radius):
+    """Blurs an image"""
     blur = ImageFilter.GaussianBlur(radius)
     try:
         return im.filter(blur)
@@ -303,7 +316,13 @@ def _guess_extension(path):
         raise Exception(msg)
 
 
-
-
 def _get_coordinates(fn):
+    """Extracts coordinates from SEM filename
+
+    Args:
+       fn (str): path to an SEM tile
+
+    Returns:
+       Coordinates as a tuple
+    """
     return tuple([int(c) for c in fn.split('@')[1].split(']')[0].split(' ')])
