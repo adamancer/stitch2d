@@ -1,7 +1,8 @@
-from .composite import brighten, composite, COLORS
-from .helpers import cprint, prompt
-from .mosaic import Mosaic, mosey
-from .organizer import organize
-from .selector import Selector
+"""Stitches a 2D grid of images into a mosaic"""
+from .mosaic import Mosaic, StructuredMosaic, create_mosaic, build_grid, is_grid
+from .tile import Tile, OpenCVTile, ScikitImageTile
 
-__all__ = ['helpers', 'mosaic', 'offset', 'organizer', 'selector', 'composite']
+
+__version__ = "1.0b1"
+__author__ = "Adam Mansur"
+__credits__ = "Smithsonian National Museum of Natural History"

@@ -3,10 +3,9 @@ channels:
 - conda-forge
 - default
 dependencies:
-- python=3.6
+- python>=3.7
+- pip
+- joblib
 - numpy
 - opencv
-- pillow
-- pip
-- pyside2
-- pip: [pyglet]
+- scikit-image

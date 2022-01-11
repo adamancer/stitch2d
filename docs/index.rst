@@ -1,22 +1,24 @@
-.. stitch2d documentation master file, created by
-   sphinx-quickstart on Sat Oct 31 17:57:33 2015.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+stitch2d
+========
 
-Stitch2D Documentation
-======================
+stitch2D is a Python script that stitches a two-dimensional grid of tiles
+into a mosaic. It was originally developed for stitching together images
+collected on various microscopes in the Department of Mineral Sciences at
+the Smithsonian National Museum of Natural History.
 
-Contents:
+When tiles are stitched together by stitch2d, they are translated, not
+rotated, resized, or warped. As a result, stitch2d requires all images to
+be the same size and orientation. Images must overlap, although they don't
+necessarily need to be arranged in a grid.
+
+Source code for this project is located on
+`GitHub <https://github.com/adamancer/stitch2d>`_.
+
+Contents
+--------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
-   stitch2d
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   user-guide
+   api

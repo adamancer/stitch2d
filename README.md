@@ -1,194 +1,225 @@
-Stitch2D
+stitch2D
 ========
 
-*Some features in this script require OpenCV 3.0 and ImageMagick.*
+stitch2D is a Python script that stitches a two-dimensional grid of
+tiles into a mosaic. It was originally developed for stitching together
+images collected on various microscopes in the Department of Mineral
+Sciences at the Smithsonian National Museum of Natural History.
 
-Stitch2D is a Python script that can be used to stitch a two-dimensional
-grid of tiles into a mosaic. As of version 0.4, it works in Python 3 only.
+When tiles are stitched together by stitch2d, they are translated, not
+rotated, resized, or warped. As a result, stitch2d requires all images
+to be the same size and orientation. Images must overlap, although they
+don't necessarily need to be arranged in a grid.
 
-The easiest way to install the stitch2d package is to use [Miniconda]. Once
-you have Miniconda installed on your system, open the Anaconda Prompt and use
-the following commands to install stitch2d into its own environment:
+In addition to the instructions below, a guide and API reference are
+available in the
+[documentation](https://stitch2d.readthedocs.io/en/latest/).
 
+Install
+-------
+
+Install stitch2d using git and pip:
+
+    git clone https://github.com/adamancer/stitch2d
+    cd stitch2d
+    pip install .
+
+Quick start
+-----------
+
+The following code can be used to create and save a mosaic:
+
+``` python
+from stitch2d import create_mosaic
+
+
+mosaic = create_mosaic("/path/to/tiles")
+
+try:
+    mosaic.load_params()
+except FileNotFoundError:
+    mosaic.downsample(0.6)
+    mosaic.align()
+    mosaic.reset_tiles()
+    mosaic.save_params()
+
+mosaic.smooth_seams()
+mosaic.save("mosaic.jpg")
 ```
-cd /path/to/directory
-git clone https://github.com/adamancer/stitch2d
-cd stitch2d
-conda env create -f requirements.yml
-conda activate stitch2d
-pip install .
-```
 
-Other installation methods may require compiling OpenCV manually.
+A simple stitching workflow is also available from the command line. To
+create a smoothed mosaic and save it as a JPEG, run:
 
+    stitch2d path/to/tiles --smooth -output mosaic.jpg
+
+For more information about using this command, including available
+parameters, run:
+
+    stitch2d --help
 
 Overview
 --------
 
-Users can set offsets manually (if the offset is regular) or automatically
-(if OpenCV is installed). If OpenCV is used, tiles that cannot be placed
-confidently are excluded from the final mosaic. Tiles are not warped in
-either case.
+stitch2d includes two classes that can be used to create mosaics from a
+list of tiles:
 
-The options available in this module are fairly basic. For more complex
-tilesets, consider using the
-[image stitching plugin](http://fiji.sc/Image_Stitching) in Fiji.
+-   `Mosaic`, which incorporates no information about how the tiles in
+    the mosaic are arranged
+-   `StructuredMosaic`, which arranges the tiles into a grid based on
+    parameters supplied by the user
 
-[Documentation](http://stitch2d.readthedocs.org/en/latest/stitch2d.html) is
-available at ReadTheDocs.
+You can also use `create_mosaic()`, as above, which accepts the same
+arguments as `StructuredMosaic`. This function returns a
+`StructuredMosaic` if grid parameters are provided or can be inferred
+from the filenames of the tiles or a `Mosaic` if not.
 
-Using the Command Line Tools
-----------------------------
+### Mosaic
 
- *An example tileset is included in the package in the files directory as
- example.zip  (18.5 MB; 8 columns, snaked).*
+Since `Mosaic` doesn't know anything about the tile structure, it can be
+slow, especially for large grids where lots of tiles need to be
+compared. It's almost always faster to use `StructuredMosaic` where
+possible.
 
-Begin by collecting the tilesets you want to stitch as subdirectories
-in a single folder. Each subdirectory processed with a single command
-will be processed use the same parameters, so offsets for the different
-tilesets should be very similar.
+Initialize a `Mosaic` by pointing it to the directory where the tiles of
+interest live:
 
-There are four subcommands that can be accessed from the command line:
-mosaic, composite, organize, and select. In addition to the text below,
-information about of these commands can be accessed from the command
-line using -h.
+``` python
+from stitch2d import Mosaic
 
-**mosaic**
-
-Use the mosaic subcommand to stitch together a set of tiles. The resulting
-mosaic is saved in the parent of the directory containing the source tiles.
-From the command line:
-
-```
-stitch2d mosaic
+mosaic = Mosaic("/path/to/tiles")
 ```
 
-You can specify additional keyword arguments to control how tiles are stitched:
+`Mosaic` also includes a class attribute, `num_cores`, to specify how
+many cores it should use when aligning and stitching a mosaic. By
+default, it uses one core. Modify this value with:
 
-```
-stitch2d mosaic -path /path/to/tiles -matcher brute-force -scalar 0.5 -threshold 0.7 --equalize_histogram --create_jpeg
-```
-
-Optional arguments include:
-
-*  **-path**: Specifies to path to the source tiles. This argument works in
-   all subcommands except organize. If no path is specified, you will be
-   prompted to select a directory.
-*  **-numcols**: Specifies the number of columns in the mosaic. If not provided,
-   the user will be prompted for this information if the script can't figure
-   it out.
- *  **--blur**: Specifies a blur radius to smooth the appearance of features
-   (but not the boundaries between tiles; see --smooth below). Sometimes
-   useful when prettifying element maps but not necessary in most cases.
-*  **--raster**, **--snake**: Specifies whether tileset is rastered or snaked.
-   If neither argument is provided, the user will be prompted for this
-   information.
-*  **--smooth**: Specifies whether to try to smooth boundaries between tiles
-   to prevent checkerboarding
-*  **--create_jpeg**: Specifies whether to create a half-size JPEG derivative
-   of the final mosaic.
-*  **--manual**: Force manual selection of offsets. The script will
-   default to manual matching if OpenCV is not installed.
-
-The following arguments can be used to tweak the behavior of OpenCV:
-
-*  **-matcher**: Specifies the algorithm used for feature matching. Must
-   be either "brute-force" or "flann"; "brute-force" is the default. **Note:**
-   The flann matcher has proven unreliable and is currently disabled.
-*  **-scalar**: Specifies the amount by which to resize source tiles
-   before attempting to match features. Must be a decimal between 0 and 1;
-   the default value is 0.5. Smaller values are faster but potentially less
-   accurate. The mosaic itself will be made from the full-sized tiles.
-*  **-threshold**: The threshold for the Lowe test. Must be a decimal
-   between 0 and 1; the default value is 0.7. Lower values give fewer but
-   better matches.
-*  **--equalize_histogram**: Specifies whether to try to equalize histogram
-   in the source image. This can increase contrast and produce better matches,
-   but increases computation time.
-
-These keywords can also be passed directly stitch2d.mosey().
-
-More information about OpenCV parameters can be found in the [OpenCV-Python
-tutorials](https://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_feature2d/py_table_of_contents_feature2d/py_table_of_contents_feature2d.html).
-
-**composite**
-
-Makes a composite image by recoloring and overlaying SEM element maps with
-data for different elements.
-
-```
-stitch2d composite -path /path/to/mosaics -red Fe -green Mg -blue Al
+``` python
+Mosaic.num_cores = 2
 ```
 
-The composite commands accepts the **-path**, **-label**, and **-create_jpeg** arguments as defined above for mosaic. Additional arguments are used to map
-colors to elements. Valid color arguments include **-red**, **-green**,
-**-blue**, **-cyan**, **-magenta**, **-yellow**, **-black**, and **-white**.
-Pixels in the images being composited should be tints/shades of these eight
-colors.
+Even when using multiple cores, detecting and extracting features can be
+time consuming. One way to speed up the process is to reduce the
+resolution of the tiles being analyzed:
 
-The composite function uses the filename to determine which element is
-pictured, so the filename of each mosaic should end with \_{element}.
-
-**select**
-
-Use the selector tool to select tiles to exclude from future SEM
-element mapping. This tool does the following:
-
-*  Creates a points file for use with Noran System Seven. File contains
-   the center point of each tile that was kept from the original grid.
-   **The points file has not been tested.**
-*  Moves excluded tiles to a directory in the source folder. These tiles
-   are automatically reintegrated if the selection script is run again.
-*  Produces a list of tiles to skip. The mosaic script uses this list to
-   fill in gaps in the mosaic where the excluded tiles were removed.
-*  Produces a screenshot showing the final selection grid.
-
-To use the select script:
-
-```
-stitch2d select
+``` python
+mosaic.downsample(0.6)  # downsamples all tiles larger than 0.6 mp
 ```
 
-Click the tiles you'd like to remove, or click a darkened tile to reinstate it.
-As with the mosaic script, the select command accepts an optional path argument
-using the -path flag.
+Alternatively you can resize the tiles without the size check:
 
-**organize**
-
-This command organizes
-element maps produces by Noran System Seven into element-specific folders
-suitable for mosaicking. It accepts optional arguments for the source and
-destination directories:
-
-```
-stitch2d organize /path/to/source /path/to/destination
+``` python
+mosaic.resize(0.6)      # resizes all tiles to 0.6 mp
 ```
 
+You can then align the smaller tiles:
 
-Recommended Libraries
-=====================
+``` python
+mosaic.align()
+```
 
-OpenCV
-------
- **OpenCV can be installed using Miniconda, and the instructions below should
-no longer be necessary (and are in any case likely out of date).**
+In either case, you can restore the full-size images prior to stitching
+the mosaic together:
 
-[OpenCV](http://www.opencv.org/) is a super useful, basically
-open source computer vision library. It's a bit complicated to
-install. I found the following tutorials useful:
+``` python
+mosaic.reset_tiles()
+```
 
-*  [OS X](http://www.pyimagesearch.com/2015/06/15/install-opencv-3-0-and-python-2-7-on-osx/) (check the comments if you have issues getting the Python bindings
-  to show up)
-*  [Ubuntu](http://www.pyimagesearch.com/2015/06/22/install-opencv-3-0-and-python-2-7-on-ubuntu/)
-*  [Windows](http://docs.opencv.org/3.0-beta/doc/tutorials/introduction/windows_install/windows_install.html)
+Sometimes brightness and contrast can vary significantly between
+adjacent tiles, producing a checkerboard effect when the mosaic is
+stitched together. This can be mitigated in many cases using
+`smooth_seams()`, which aligns brightness/contrast between neighboring
+tiles by comparing areas of overlap:
 
+``` python
+mosaic.smooth_seams()
+```
 
-ImageMagick
------------
-The Python Imaging Library will sometimes fail to open TIFFs. When the
-mosaic script encounters unreadable TIFFs, it uses [ImageMagick](http://www.imagemagick.org/) to create a usable copy of the
-entire tile set. If ImageMagick is not installed, this workaround will
-fail and the mosaic will not be created.
+Once the tiles have been positioned, the mosaic can be viewed:
 
+``` python
+mosaic.show()
+```
 
-[Miniconda]: https://conda.io/miniconda.html
+Or saved to a file:
+
+``` python
+mosaic.save("mosaic.tif")
+```
+
+Or returned as a numpy array if you need more control over the final
+mosaic:
+
+``` python
+arr = mosaic.stitch()
+```
+
+Once the tiles are positioned, their locations are stored in the
+`params` attribute, which can be saved as JSON:
+
+``` python
+mosaic.save_params("params.json")
+```
+
+Those parameters can then be loaded into a new mosaic if needed:
+
+``` python
+mosaic.load_params("params.json")
+```
+
+### StructuredMosaic
+
+`StructuredMosaic` allows the user to specify how the tiles in the
+mosaic should be arranged. For tilesets of known structure, it is
+generally faster but otherwise works the same as `Mosaic`. Initialize a
+structured mosaic with:
+
+``` python
+from stitch2d import StructuredMosaic
+
+mosaic = StructuredMosaic(
+    "/path/to/tiles",
+    dim=15,                  # number of tiles in primary axis
+    origin="upper left",     # position of first tile
+    direction="horizontal",  # direction to traverse first
+    pattern="snake"          # snake or raster
+  )
+```
+
+For situations where adequate-but-imperfect tile placement is
+acceptable, `StructuredMosaic` can use its knowledge of the tile grid to
+quickly build a mosaic based on the positions of only a handful of
+tiles:
+
+``` python
+# Stop aligning once 5 tiles have been successfully placed
+mosaic.align(limit=5)
+
+# Build the rest of the mosaic based on the positioned tiles. If from_placed
+# is True, missing tiles are appended to the already positioned tiles. If
+# False, a new mosaic is calculated from scratch.
+mosaic.build_out(from_placed=True)
+```
+
+The `build_out()` method can also be used to ensure that all tiles
+(including those that could not be placed using feature matching) appear
+in the final mosaic. The primary disadvantage of this method is that the
+placement of those tiles is less precise.
+
+Similar tools
+-------------
+
+The opencv package includes a powerful stitching tool designed for 2D
+and 3D images. I didn't have any luck getting it to work with microscope
+tilesets, but it includes advanced features missing from this package
+(lens corrections, affine transformations beyond simple translation,
+etc.) and can be configured to work with 2D images. It's definitely
+worth a look for tilesets more complex than the simple case handled
+here. For code and tutorials, try:
+
+-   [opencv_stitching_tool](https://github.com/opencv/opencv/tree/4.x/apps/opencv_stitching_tool)
+-   [opencv_stitching_tutorial](https://github.com/lukasalexanderweber/opencv_stitching_tutorial)
+-   [OpenCV: High level stitching API (Stitcher
+    class)](https://docs.opencv.org/4.x/d8/d19/tutorial_stitcher.html)
+
+[Fiji](https://imagej.net/software/fiji/) also includes a 2D/3D
+stitching tool.
