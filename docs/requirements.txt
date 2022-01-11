@@ -1,5 +1,9 @@
+# Package requirements
 joblib
-m2r2
 numpy
 opencv-python
 scikit-image
+
+# ReadTheDocs requirements
+m2r2
+Sphinx~=4.3.2
