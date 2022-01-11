@@ -32,7 +32,7 @@ setup(
     description="Stitches a 2D grid of images into a mosaic",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version="1.0b1",
+    version="1.0",
     classifiers=[
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3.7",

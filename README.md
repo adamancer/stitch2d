@@ -18,7 +18,11 @@ available in the
 Install
 -------
 
-Install stitch2d using git and pip:
+Install stitch2d with pip:
+
+    pip install stitch2d
+
+Or install from the GitHub repository using git and pip:
 
     git clone https://github.com/adamancer/stitch2d
     cd stitch2d
