@@ -39,7 +39,7 @@ copyright = '2015-2022, Adam Mansur'
 author = 'Adam Mansur'
 
 # The full version, including alpha/beta/rc tags
-release = '0.6b'
+release = '1.0'
 
 
 # -- General configuration ---------------------------------------------------

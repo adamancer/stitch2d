@@ -157,6 +157,14 @@ mosaic:
 arr = mosaic.stitch()
 ```
 
+The default backend, opencv, orders color channels as BGR. You may want
+to reorder the color channels before working with the image in a
+different program. To get an RGB image from a BGR image, use:
+
+``` python
+arr = arr[...,::-1].copy()
+```
+
 Once the tiles are positioned, their locations are stored in the
 `params` attribute, which can be saved as JSON:
 
@@ -184,12 +192,12 @@ mosaic = StructuredMosaic(
     "/path/to/tiles",
     dim=15,                  # number of tiles in primary axis
     origin="upper left",     # position of first tile
-    direction="horizontal",  # direction to traverse first
+    direction="horizontal",  # primary axis (i.e., the direction to traverse first)
     pattern="snake"          # snake or raster
   )
 ```
 
-For situations where adequate-but-imperfect tile placement is
+For large tilesets where adequate-but-imperfect tile placement is
 acceptable, `StructuredMosaic` can use its knowledge of the tile grid to
 quickly build a mosaic based on the positions of only a handful of
 tiles:
