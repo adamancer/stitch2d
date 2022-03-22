@@ -58,6 +58,8 @@ class Tile:
         the y coordinate of the image within the mosaic
     x : float
         the x coordinate of the image within the mosaic
+    channel_order : str
+        the order of the three color channels in the image, e.g., RGB or BGR
     scale : float
         the current scale of the tile relative to the original image
     features_detected : bool
@@ -108,6 +110,8 @@ class Tile:
         self.features_detected = None
         self.descriptors = None
         self.keypoints = None
+
+        self.channel_order = None
 
         self._detector = detector
 
@@ -749,6 +753,7 @@ class OpenCVTile(Tile):
     def __init__(self, data, detector="sift", matcher="flann"):
         super().__init__(data)
 
+        self.channel_order = "BGR"
         self._detector = detector
         self._matcher = matcher
 
@@ -926,11 +931,11 @@ class ScikitImageTile(Tile):
     See Tile for available attributes.
     """
 
+    detectors = {"sift": _DefaultInstance(SIFT, cache=True)}
+
     def __init__(self, data, detector="sift"):
-        self.detectors = {
-            "sift": _DefaultInstance(SIFT, cache=True),
-        }
         super().__init__(data, detector=detector)
+        self.channel_order = "RGB"
 
     def load_imdata(self):
         """Loads copy of source data

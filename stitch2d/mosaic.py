@@ -436,13 +436,25 @@ class Mosaic:
 
         logger.info(f"Smoothed seams in {self}")
 
-    def stitch(self):
-        """Stitches mosaic using either placed tiles or row/col of tiles"""
+    def stitch(self, channel_order=None):
+        """Stitches mosaic using either placed tiles or row/col of tiles
+
+        Parameters
+        ----------
+        channel_order : str
+            order of the three color channels in the stitched array, for
+            example, RGB. Uses the backend order if not given, which can
+            give unexpected results (for example, OpenCV uses BGR).
+
+        Returns
+        -------
+        numpy.ndarray
+        """
 
         placed = [t for t in self.tiles if t.placed]
 
         # If mosaic has not been aligned, set x and y based on tile location
-        reset_xy = not bool(placed)
+        reset_xy = not placed
         if reset_xy:
             for tile in self.tiles:
                 tile.y = tile.row * tile.height
@@ -451,6 +463,12 @@ class Mosaic:
 
         self._normalize_coordinates()
         arr = placed[0].draw(placed[1:])
+
+        # Reorder color channels to match the specified order
+        if channel_order and channel_order.upper() != placed[0].channel_order:
+            order = [placed[0].channel_order.index(c) for c in channel_order.upper()]
+            order.extend(range(len(order), len(arr.shape) + 1))
+            arr = arr[..., order].copy()
 
         # Reset tile x and y to None if set above
         if reset_xy:

@@ -67,9 +67,9 @@ provided or can be inferred from the filenames of the tiles or a
 
 ### Mosaic
 
-Since :py:class:`~stitch2d.mosaic.Mosaic` doesn't know anything about
+Since :py:class:`~stitch2d.mosaic.Mosaic` doesn’t know anything about
 the tile structure, it can be slow, especially for large grids where
-lots of tiles need to be compared. It's almost always faster to use
+lots of tiles need to be compared. It’s almost always faster to use
 :py:class:`~stitch2d.mosaic.StructuredMosaic` where possible.
 
 Initialize a :py:class:`~stitch2d.mosaic.Mosaic` by pointing it to the
@@ -155,6 +155,12 @@ different program. To get an RGB image from a BGR image, use:
 arr = arr[...,::-1].copy()
 ```
 
+**New in 1.1:** Or specify the desired channel order when stitching:
+
+``` python
+arr = mosaic.stitch("RGB")
+```
+
 Once the tiles are positioned, their locations are stored in the
 :py:attr:`~stitch2d.mosaic.Mosaic.params` attribute, which can be saved
 as JSON:
@@ -214,10 +220,10 @@ Similar tools
 -------------
 
 The opencv package includes a powerful stitching tool designed for 2D
-and 3D images. I didn't have any luck getting it to work with microscope
+and 3D images. I didn’t have any luck getting it to work with microscope
 tilesets, but it includes advanced features missing from this package
 (lens corrections, affine transformations beyond simple translation,
-etc.) and can be configured to work with 2D images. It's definitely
+etc.) and can be configured to work with 2D images. It’s definitely
 worth a look for tilesets more complex than the simple case handled
 here. For code and tutorials, try:
 

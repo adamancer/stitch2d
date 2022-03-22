@@ -268,6 +268,15 @@ def test_mosaic_resize_and_reset(cv_aligned_mosaic):
     assert tile.shape == (442, 512)
 
 
+def test_stitch_channel_order(cv_aligned_mosaic):
+    mosaic = cv_aligned_mosaic.copy()
+    bgr_mosaic = mosaic.stitch()
+    rgb_mosaic = mosaic.stitch("rgb")
+    assert np.array_equal(bgr_mosaic[..., 0], rgb_mosaic[..., 2])
+    assert np.array_equal(bgr_mosaic[..., 1], rgb_mosaic[..., 1])
+    assert np.array_equal(bgr_mosaic[..., 2], rgb_mosaic[..., 0])
+
+
 def test_load_params(cv_aligned_mosaic, output_dir):
     mosaic = cv_aligned_mosaic.copy()
     path = str(output_dir / "test_load_params.json")
