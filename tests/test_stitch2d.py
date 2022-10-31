@@ -175,6 +175,24 @@ def test_mosaic_from_downsampled(cv_tiles, params, output_dir):
         assert abs(x1 - x2) < 10
 
 
+def test_mosaic_with_varying_tile_dims(params, output_dir):
+    mosaic = StructuredMosaic(TILE_PATH, tile_class=OpenCVTile)
+
+    # Trim rows from first grid row
+    mosaic.grid[0][0].imdata = np.delete(mosaic.grid[0][0].imdata, range(100), axis=0)
+    mosaic.grid[0][1].imdata = np.delete(mosaic.grid[0][1].imdata, range(100), axis=0)
+
+    # Trim columns from first grid column
+    mosaic.grid[0][0].imdata = np.delete(mosaic.grid[0][0].imdata, range(100), axis=1)
+    mosaic.grid[1][0].imdata = np.delete(mosaic.grid[1][0].imdata, range(100), axis=1)
+    mosaic.grid[2][0].imdata = np.delete(mosaic.grid[2][0].imdata, range(100), axis=1)
+
+    mosaic = StructuredMosaic(mosaic.grid)
+    mosaic.save(str(output_dir / f"test_mosaic_with_varying_tile_dims.jpg"))
+
+    assert mosaic.stitch().shape == (1226, 924)
+
+
 def test_ragged_mosaic(cv_tiles, output_dir):
     mosaic = StructuredMosaic(cv_tiles.copy()[:-1])
     mosaic.align()

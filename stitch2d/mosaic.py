@@ -466,9 +466,14 @@ class Mosaic:
         # If mosaic has not been aligned, set x and y based on tile location
         reset_xy = not placed
         if reset_xy:
-            for tile in self.tiles:
-                tile.y = tile.row * tile.height
-                tile.x = tile.col * tile.width
+            y = 0
+            for row in self.grid:
+                x = 0
+                for tile in row:
+                    tile.x = x
+                    tile.y = y
+                    x += tile.width
+                y += tile.height
             placed = self.tiles
 
         self._normalize_coordinates()
