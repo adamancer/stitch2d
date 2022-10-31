@@ -2,8 +2,13 @@
 import logging
 import os
 import re
+import sys
 from tempfile import NamedTemporaryFile
 import uuid
+import warnings
+
+if not sys.warnoptions:
+    warnings.simplefilter("once")
 
 import cv2 as cv
 import numpy as np
@@ -631,6 +636,20 @@ class Tile:
             self.resize(size_or_shape, *args, **kwargs)
         return self
 
+    def prep_imdata(self):
+        """Returns a copy of the tile data suitable for feature detection
+
+        Users may wish to create a subclass with a custom version of this method,
+        for example, to scale intensities, enhance contrast, or select image data
+        from an array that include additional bands.
+
+        Returns
+        -------
+        numpy.ndarray
+            copy of image data
+        """
+        return self.imadata.copy()
+
     def detect_and_extract(self, *args, **kwargs):
         """Detects and extracts features within the tile
 
@@ -826,6 +845,34 @@ class OpenCVTile(Tile):
 
         return self
 
+    def prep_imdata(self):
+        """Returns a copy of the tile data suitable for feature detection
+
+        The built-in version of this method checks if the imdata attribute is
+        an 8-bit array, returning a copy if so. Otherwise, it rescales the
+        intensities and returns an 8-bit copy of the array. The conversion is
+        simplistic, and users may prefer to create a subclass with a custom
+        version of this method instead, for example, to scale intensities,
+        enhance contrast, or select image data from an array that include
+        additional bands.
+
+        Returns
+        -------
+        numpy.ndarray
+            copy of image data as an 8-bit array
+        """
+        if self.imdata.dtype != np.uint8:
+            warnings.warn(
+                f"Images must be 8-bit for feature detection using"
+                f" {self.__class__.__name__}. Converted tile data to 8-bit,"
+                f" but consider subclassing {self.__class__.__name__} and"
+                f" defining a custom prep_imdata() method to better manage"
+                f" the conversion."
+            )
+            imdata = self.imdata - self.imdata.min()
+            return np.uint8(255 * imdata / imdata.max())
+        return self.imdata.copy()
+
     def detect_and_extract(self, *args, **kwargs):
         """Detects and extracts features within the tile
 
@@ -847,7 +894,7 @@ class OpenCVTile(Tile):
         if self.features_detected is None:
 
             try:
-                detected = self.detector.detectAndCompute(self.imdata, None)
+                detected = self.detector.detectAndCompute(self.prep_imdata(), None)
             except KeyError:
                 self.features_detected = False
             else:

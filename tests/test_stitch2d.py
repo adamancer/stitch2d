@@ -175,6 +175,26 @@ def test_mosaic_from_downsampled(cv_tiles, params, output_dir):
         assert abs(x1 - x2) < 10
 
 
+def test_mosaic_from_16_bit(params, output_dir):
+    mosaic = StructuredMosaic(TILE_PATH, tile_class=OpenCVTile)
+    for tile in mosaic.tiles:
+        tile.imdata = np.uint16(tile.imdata)
+    mosaic.detect_and_extract()
+    mosaic.downsample(0.3)
+    mosaic.align(limit=5)
+    mosaic.build_out()
+    assert mosaic.placed
+
+    mosaic.save(str(output_dir / f"test_mosaic_from_16_bit.tif"))
+
+    p1 = map_coords_to_filename(mosaic.params)
+    p2 = map_coords_to_filename(params)
+    for fn, (y1, x1) in p1.items():
+        y2, x2 = p2[fn]
+        assert abs(y1 - y2) < 10
+        assert abs(x1 - x2) < 10
+
+
 def test_mosaic_with_varying_tile_dims(params, output_dir):
     mosaic = StructuredMosaic(TILE_PATH, tile_class=OpenCVTile)
 
