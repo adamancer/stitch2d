@@ -65,6 +65,11 @@ class Mosaic:
                     " `path_or_tiles`. Using class of tiles instead."
                 )
 
+            if not issubclass(tile_class, Tile):
+                raise ValueError(
+                    f"tile_class must be Tile or subclass if inferred (got {tile_class}"
+                )
+
             self.tile_class = tile_class
 
         if not self.tile_class:
@@ -343,6 +348,8 @@ class Mosaic:
 
         # Limit to tiles with detected features
         candidates = [t for t in self.tiles if t.features_detected]
+        if not candidates:
+            raise RuntimeError("No features detected in tiles")
 
         # Start building from feature-rich tiles
         candidates.sort(key=lambda t: -len(t.keypoints))
@@ -381,6 +388,9 @@ class Mosaic:
         else:
             if limit is not None:
                 logger.warning(f"Failed to place {limit} tiles")
+
+        if self.placed == 1 and len(self.tiles) > 1:
+            raise RuntimeError("Could not align tiles")
 
         logger.info(f"Aligned {self.placed} tiles in {self}")
 
@@ -833,6 +843,9 @@ class StructuredMosaic(Mosaic):
             if limit is not None:
                 logger.warning(f"Failed to place {limit} tiles")
 
+        if self.placed == 1 and len(self.tiles) > 1:
+            raise RuntimeError("Could not align tiles")
+
         logger.info(f"Aligned {self.placed} tiles in {self}")
 
     def build_out(self, from_placed=True, offsets=None):
@@ -1151,7 +1164,7 @@ def create_mosaic(
 
     try:
         return StructuredMosaic(path_or_tiles, tile_class=tile_class, **kwargs)
-    except OSError:
+    except ValueError:
         if kwargs:
             raise
         return Mosaic(path_or_tiles, tile_class=tile_class)

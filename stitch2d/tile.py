@@ -246,7 +246,9 @@ class Tile:
         numpy.ndarray
             copy of source data
         """
-        raise NotImplementedError("`load_imdata` must be implemented in subclass")
+        if isinstance(self.source, np.ndarray):
+            return self.source.copy()
+        raise ValueError("Data must be a numpy array")
 
     def copy(self):
         """Creates a copy of the tile
