@@ -8,6 +8,24 @@ The format is based on [Keep a
 Changelog](https://keepachangelog.com/en/1.0.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+1.2
+---
+
+### Added
+
+-   Added `prep_imdata()` to Tile and Tile subclasses. This method can
+    be used to prepare image data before feature detection and matching,
+    for example, by converting a 16-bit image to an 8-bit image.
+
+### Changed
+
+-   Fixed bug stitching mosaics that have not been aligned and that have
+    inconsistent row heights or column widths. The tiles making up each
+    row must still have the same height, and those making up each column
+    must have the same width.
+-   The `Mosaic.align()` method now raises RuntimeError if it fails to
+    detect any features or align at least two tiles.
+
 1.1
 ---
 

@@ -223,21 +223,49 @@ The `build_out()` method can also be used to ensure that all tiles
 in the final mosaic. The primary disadvantage of this method is that the
 placement of those tiles is less precise.
 
+Beyond 8-bit images
+-------------------
+
+**New in 1.2:** The Tile class now includes a `prep_imdata()` method
+that can be used to tweak the image data being used to align the mosaic.
+When using the default OpenCVTile class, this method creates an 8-bit
+copy of the image data to use for feature detection and matching while
+retaining the original data to use when building the mosaic.
+
+The default behavior of `prep_imdata()` is simplistic. To customize it,
+use a subclass. For example, the default method scales the intensities
+of the original data based on the maximum intensity found in the array.
+For images with a small number of extremely bright pixels, this can
+yield unusably dim images. A better approach may be to use
+`np.percentile()`:
+
+``` python
+import numpy as np
+
+class MyTile(OpenCVTile):
+
+    def prep_imdata(self):
+        imdata = self.imdata - self.imdata.min()
+        return  np.uint8(255 * imdata / np.percentile(imdata, 99))
+
+mosaic = create_mosaic("path/to/tiles", tile_class=MyTile)
+```
+
 Similar tools
 -------------
 
-The opencv package includes a powerful stitching tool designed for 2D
-and 3D images. I didn’t have any luck getting it to work with microscope
+The opencv package includes [powerful tools for stitching 2D and 3D
+images]((https://docs.opencv.org/4.x/d8/d19/tutorial_stitcher.html)).
+Much of that functionality has been ported to Python as the
+[stitching](https://github.com/lukasalexanderweber/stitching) package,
+which streamlines the opencv API and includes a useful
+[tutorial](https://github.com/lukasalexanderweber/stitching_tutorial). I
+didn’t have any luck getting it to work consistently with microscope
 tilesets, but it includes advanced features missing from this package
 (lens corrections, affine transformations beyond simple translation,
 etc.) and can be configured to work with 2D images. It’s definitely
 worth a look for tilesets more complex than the simple case handled
-here. For code and tutorials, try:
-
--   [opencv_stitching_tool](https://github.com/opencv/opencv/tree/4.x/apps/opencv_stitching_tool)
--   [opencv_stitching_tutorial](https://github.com/lukasalexanderweber/opencv_stitching_tutorial)
--   [OpenCV: High level stitching API (Stitcher
-    class)](https://docs.opencv.org/4.x/d8/d19/tutorial_stitcher.html)
+here.
 
 [Fiji](https://imagej.net/software/fiji/) also includes a 2D/3D
 stitching tool.
