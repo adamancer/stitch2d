@@ -6,4 +6,5 @@ scikit-image
 
 # ReadTheDocs requirements
 m2r2
-Sphinx~=4.3.2
+Sphinx
+sphinx_rtd_theme
