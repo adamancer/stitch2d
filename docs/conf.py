@@ -35,7 +35,7 @@ def setup(app):
 # -- Project information -----------------------------------------------------
 
 project = 'stitch2d'
-copyright = '2015-2022, Adam Mansur'
+copyright = '2015-2024, Adam Mansur'
 author = 'Adam Mansur'
 
 # The full version, including alpha/beta/rc tags
